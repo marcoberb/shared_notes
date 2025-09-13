@@ -1,0 +1,12 @@
+# Environment files
+.env*
+
+# SSL Certificates and Keys
+certs/*.crt
+certs/*.key
+
+postgres_data/
+
+# OS files
+.DS_Store
+Thumbs.db
