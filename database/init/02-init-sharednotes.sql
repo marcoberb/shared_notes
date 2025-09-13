@@ -19,6 +19,15 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Insert default tags
+INSERT INTO tags (name) VALUES
+    ('work'),
+    ('personal'),
+    ('urgent'),
+    ('idea'),
+    ('study')
+ON CONFLICT (name) DO NOTHING;
+
 -- Junction table for notes and tags
 CREATE TABLE IF NOT EXISTS note_tags (
     note_id BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
