@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS note_shares (
     UNIQUE(note_id, shared_with_user_id)
 );
 
+-- Indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_notes_owner_id ON notes(owner_id);
+CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);
+CREATE INDEX IF NOT EXISTS idx_note_shares_note_id ON note_shares(note_id);
+CREATE INDEX IF NOT EXISTS idx_note_shares_shared_with_user_id ON note_shares(shared_with_user_id);
+CREATE INDEX IF NOT EXISTS idx_note_tags_note_id ON note_tags(note_id);
+CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id);
+
 -- Function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
