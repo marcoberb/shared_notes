@@ -1,0 +1,203 @@
+{
+  "realm": "sharednotes",
+  "enabled": true,
+  "displayName": "SharedNotes",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>SharedNotes</span></div>",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "accessTokenLifespan": 900,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 10800,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespan": 5184000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "clients": [
+    {
+      "clientId": "sharednotes-frontend",
+      "name": "SharedNotes Frontend",
+      "description": "Frontend client for SharedNotes application",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ]
+    },
+    {
+      "clientId": "sharednotes-api",
+      "name": "SharedNotes API",
+      "description": "Backend API client for SharedNotes application",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "secret": "sharednotes-api-secret-key-2024",
+      "defaultClientScopes": [
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "service-account-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        }
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-sharednotes-api",
+      "enabled": true,
+      "serviceAccountClientId": "sharednotes-api"
+    },
+    {
+      "username": "pippo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Pippo",
+      "lastName": "Disney",
+      "email": "pippo@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pippo123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "user"
+      ]
+    },
+    {
+      "username": "pluto",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Pluto",
+      "lastName": "Disney",
+      "email": "pluto@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pluto123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "user"
+      ]
+    },
+    {
+      "username": "paperino",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Paperino",
+      "lastName": "Duck",
+      "email": "paperino@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "paperino123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "user"
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "User role for SharedNotes application",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sharednotes"
+      },
+      {
+        "name": "admin",
+        "description": "Admin role for SharedNotes application", 
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sharednotes"
+      }
+    ]
+  },
+  "groups": [],
+  "defaultRoles": [
+    "user"
+  ],
+  "requiredCredentials": [
+    "password"
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpSupportedApplications": [
+    "FreeOTP",
+    "Google Authenticator"
+  ],
+  "attributes": {},
+  "keycloakVersion": "22.0.5"
+}
