@@ -70,11 +70,12 @@ class SQLAlchemySearchRepository(SearchRepository):
             count_query = base_query
             if criteria.has_tag_filter():
                 # For count with tag filtering, we need to count distinct notes
-                total_count = count_query.with_entities(
-                    func.count(distinct(NoteORM.id))
-                ).scalar()
+                total_count = (
+                    count_query.with_entities(func.count(distinct(NoteORM.id))).scalar()
+                    or 0
+                )
             else:
-                total_count = count_query.count()
+                total_count = count_query.count() or 0
 
             # Apply pagination and ordering
             note_orms = (
@@ -211,10 +212,10 @@ class SQLAlchemySearchRepository(SearchRepository):
         tag_entities = [TagEntity(id=tag.id, name=tag.name) for tag in note_orm.tags]
 
         return Note(
-            id=note_orm.id,
+            id=note_orm.id,  # Already a UUID object
             title=note_orm.title,
             content=note_orm.content,
-            owner_id=note_orm.owner_id,
+            owner_id=note_orm.owner_id,  # Already a UUID object
             tags=tag_entities,
             created_at=note_orm.created_at,
             updated_at=note_orm.updated_at,

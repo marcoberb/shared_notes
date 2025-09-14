@@ -5,6 +5,7 @@ This module contains the FastAPI router for note operations.
 import logging
 import uuid
 from typing import Optional
+from uuid import UUID
 
 from application.rest.schemas.input.note_input import NoteCreate, NoteUpdate
 from application.rest.schemas.input.share_input import ShareRequest
@@ -91,7 +92,7 @@ async def get_notes(
         Total notes: 5
     """
     try:
-        user_id = uuid.UUID(get_current_user_id(request))
+        user_id = get_current_user_id(request)
         logger.info(
             f"Getting notes for user_id: {user_id}, page: {page}, limit: {limit}"
         )
@@ -641,23 +642,50 @@ async def create_note(
     """
     user_id = get_current_user_id(request)
     logger.info(f"Creating note for user {user_id}")
+    logger.info(
+        f"Note data: title='{note.title}', content length={len(note.content)}, tags={note.tags}, share_emails={note.share_emails}"
+    )
 
     try:
         # Convert tag IDs to tag entities
         tag_entities = []
         if note.tags:
+            # Convert string UUIDs to UUID objects for comparison
+            requested_tag_uuids = [UUID(tag_id) for tag_id in note.tags]
+
             # Get all tags from repository and filter by requested IDs
             all_tags = await tag_service.get_all_tags(db)
-            tag_entities = [tag for tag in all_tags if tag.id in note.tags]
+            tag_entities = [tag for tag in all_tags if tag.id in requested_tag_uuids]
 
             # Validate that all requested tags exist
             found_tag_ids = {tag.id for tag in tag_entities}
-            requested_tag_ids = set(note.tags)
+            requested_tag_ids = set(requested_tag_uuids)
             missing_tags = requested_tag_ids - found_tag_ids
             if missing_tags:
                 raise HTTPException(
                     status_code=400, detail=f"Tags not found: {list(missing_tags)}"
                 )
+
+        # Validate all emails BEFORE creating the note
+        shared_user_ids = []
+        if note.share_emails:
+            logger.info(
+                f"Processing {len(note.share_emails)} emails for sharing: {note.share_emails}"
+            )
+            for email in note.share_emails:
+                # Resolve email to Keycloak user ID
+                shared_with_user_id = await get_user_id_by_email(email)
+
+                if not shared_with_user_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Utente non trovato per l'email: {email}",
+                    )
+
+                logger.info(f"Email {email} resolved to user ID: {shared_with_user_id}")
+                shared_user_ids.append((email, shared_with_user_id))
+        else:
+            logger.info("No emails provided for sharing")
 
         # Use domain service to create note
         created_note = await note_service.create_note(
@@ -668,43 +696,46 @@ async def create_note(
             tag_entities=tag_entities,
         )
 
-        # Handle sharing during creation
-        if note.share_emails:
-            for email in note.share_emails:
-                try:
-                    # Resolve email to Keycloak user ID
-                    shared_with_user_id = await get_user_id_by_email(email)
+        # Handle sharing after successful note creation
+        if shared_user_ids:
+            try:
+                # Extract just the user IDs for the sharing operation
+                user_ids_to_share_with = [user_id for _, user_id in shared_user_ids]
+                emails_list = [email for email, _ in shared_user_ids]
 
-                    if not shared_with_user_id:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Utente non trovato per l'email: {email}",
-                        )
+                logger.info(
+                    f"Sharing note {created_note.id} with {len(user_ids_to_share_with)} users: {emails_list}"
+                )
 
-                    # Use domain service to share note
-                    await note_service.share_note(
-                        db_session=db,
-                        note_id=created_note.id,
-                        shared_by_user_id=user_id,
-                        shared_with_user_id=shared_with_user_id,
-                    )
+                # Use domain service to share note with all users at once
+                await note_service.share_note_with_users(
+                    db_session=db,
+                    note_id=created_note.id,
+                    owner_id=user_id,
+                    shared_with_user_ids=user_ids_to_share_with,
+                )
+                logger.info(
+                    f"Successfully shared note {created_note.id} with all users"
+                )
 
-                except Exception as e:
-                    logger.error(f"Failed to share note with {email}: {str(e)}")
-                    # For creation, we continue even if sharing fails
-                    # The note is created but sharing fails for specific users
+            except Exception as e:
+                logger.error(f"Failed to share note: {str(e)}")
+                raise e
 
         response = NoteResponse.from_entity(created_note)
         logger.info(f"Successfully created note {created_note.id}")
         return response
+
+    except HTTPException:
+        raise
 
     except ValueError as e:
         logger.warning(f"Invalid request parameters: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
     except NoteError as e:
-        logger.error(f"Note service error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create note")
+        logger.error(f"Note service error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create note: {str(e)}")
 
     except Exception as e:
         logger.error(f"Unexpected error creating note: {str(e)}", exc_info=True)
@@ -803,13 +834,16 @@ async def update_note(
         # Convert tag IDs to tag entities if provided
         tag_entities = None
         if note_update.tags is not None:
+            # Convert string UUIDs to UUID objects for comparison
+            requested_tag_uuids = [UUID(tag_id) for tag_id in note_update.tags]
+
             # Get all tags from repository and filter by requested IDs
             all_tags = await tag_service.get_all_tags(db)
-            tag_entities = [tag for tag in all_tags if tag.id in note_update.tags]
+            tag_entities = [tag for tag in all_tags if tag.id in requested_tag_uuids]
 
             # Validate that all requested tags exist
             found_tag_ids = {tag.id for tag in tag_entities}
-            requested_tag_ids = set(note_update.tags)
+            requested_tag_ids = set(requested_tag_uuids)
             missing_tags = requested_tag_ids - found_tag_ids
             if missing_tags:
                 raise HTTPException(
@@ -834,13 +868,16 @@ async def update_note(
         logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
+    except HTTPException:
+        raise
+
     except ValueError as e:
         logger.warning(f"Invalid request parameters: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
     except NoteError as e:
-        logger.error(f"Note service error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update note")
+        logger.error(f"Note service error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update note: {str(e)}")
 
     except Exception as e:
         logger.error(f"Unexpected error updating note: {str(e)}", exc_info=True)
@@ -947,13 +984,16 @@ async def delete_note(
         logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
+    except HTTPException:
+        raise
+
     except ValueError as e:
         logger.warning(f"Invalid request parameters: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
     except NoteError as e:
-        logger.error(f"Note service error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to delete note")
+        logger.error(f"Note service error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete note: {str(e)}")
 
     except Exception as e:
         logger.error(f"Unexpected error deleting note: {str(e)}", exc_info=True)
@@ -1216,7 +1256,7 @@ async def get_note_shares(
         Shared with 2 users
     """
     try:
-        user_id = uuid.UUID(get_current_user_id(request))
+        user_id = get_current_user_id(request)
         note_uuid = uuid.UUID(note_id)
 
         logger.info(f"Getting shares for note {note_uuid} by user {user_id}")

@@ -143,12 +143,15 @@ class PaginationMetadata:
 
         Args:
             current_page: The current page number (1-based)
-            total_notes: Total number of notes found
+            total_notes: Total number of notes found (will be converted to 0 if None)
             notes_per_page: Number of notes per page
 
         Returns:
             PaginationMetadata: Calculated pagination information
         """
+        # Ensure total_notes is not None
+        total_notes = total_notes or 0
+
         total_pages = (
             (total_notes + notes_per_page - 1) // notes_per_page
             if total_notes > 0

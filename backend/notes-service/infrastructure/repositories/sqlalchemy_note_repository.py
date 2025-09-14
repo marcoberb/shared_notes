@@ -18,7 +18,7 @@ from infrastructure.models.associations import note_tags
 from infrastructure.models.note_orm import NoteORM
 from infrastructure.models.note_share_orm import NoteShareORM
 from infrastructure.models.tag_orm import TagORM
-from sqlalchemy import distinct, func
+from sqlalchemy import distinct, func, or_
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -53,15 +53,13 @@ class SQLAlchemyNoteRepository(NoteRepository):
             db_note = NoteORM(
                 title=note.title,
                 content=note.content,
-                owner_id=str(note.owner_id),
+                owner_id=note.owner_id,
                 is_deleted=note.is_deleted,
             )
 
-            # Handle tags
+            # Handle tags - only link existing tags, never create new ones
             for tag in note.tags:
-                tag_orm = (
-                    db_session.query(TagORM).filter(TagORM.id == str(tag.id)).first()
-                )
+                tag_orm = db_session.query(TagORM).filter(TagORM.id == tag.id).first()
                 if tag_orm:
                     db_note.tags.append(tag_orm)
 
@@ -81,41 +79,44 @@ class SQLAlchemyNoteRepository(NoteRepository):
         self, db_session: Session, note_id: UUID, user_id: UUID
     ) -> Optional[Note]:
         """Get a note by ID if user has access to it.
-        
+
         Args:
             db_session (Session): Database session.
             note_id (UUID): The ID of the note to retrieve.
             user_id (UUID): The ID of the user requesting the note.
-            
+
         Returns:
             Optional[Note]: The note if found and accessible, None otherwise.
-            
+
         Raises:
             RepositoryError: If there's an error retrieving the note.
         """
         try:
-            # User can access note if they own it OR it's shared with them
+            logger.info(f"Looking for note {note_id} accessible by user {user_id}")
             note_orm = (
                 db_session.query(NoteORM)
                 .filter(
-                    NoteORM.id == str(note_id),
+                    NoteORM.id == note_id,
                     ~NoteORM.is_deleted,
-                    (
-                        NoteORM.owner_id
-                        == str(user_id)
-                        | NoteORM.id.in_(
+                    or_(
+                        NoteORM.owner_id == user_id,
+                        NoteORM.id.in_(
                             db_session.query(NoteShareORM.note_id).filter(
-                                NoteShareORM.shared_with_user_id == str(user_id)
+                                NoteShareORM.shared_with_user_id == user_id
                             )
-                        )
+                        ),
                     ),
                 )
                 .first()
             )
 
             if not note_orm:
+                logger.info(
+                    f"Note {note_id} not found or not accessible by user {user_id}"
+                )
                 return None
 
+            logger.info(f"Found note {note_id} owned by {note_orm.owner_id}")
             return self._orm_to_domain_entity(note_orm)
 
         except Exception as e:
@@ -124,30 +125,34 @@ class SQLAlchemyNoteRepository(NoteRepository):
 
     async def update_note(self, db_session: Session, note: Note) -> Note:
         """Update an existing note in the repository.
-        
+
         Args:
             db_session (Session): Database session.
             note (Note): The note entity with updated data.
-            
+
         Returns:
             Note: The updated note entity.
-            
+
         Raises:
             ValueError: If the note is not found or not accessible.
             RepositoryError: If there's an error updating the note.
         """
         try:
+            logger.info(f"Updating note {note.id} for owner {note.owner_id}")
             db_note = (
                 db_session.query(NoteORM)
                 .filter(
-                    NoteORM.id == str(note.id),
-                    NoteORM.owner_id == str(note.owner_id),
+                    NoteORM.id == note.id,
+                    NoteORM.owner_id == note.owner_id,
                     ~NoteORM.is_deleted,
                 )
                 .first()
             )
 
             if not db_note:
+                logger.warning(
+                    f"Note {note.id} not found or not accessible for owner {note.owner_id}"
+                )
                 raise ValueError(f"Note {note.id} not found or not accessible")
 
             # Update fields
@@ -155,18 +160,18 @@ class SQLAlchemyNoteRepository(NoteRepository):
             db_note.content = note.content
             db_note.updated_at = datetime.utcnow()
 
-            # Update tags
+            # Update tags - only link existing tags, never create new ones
             db_note.tags.clear()
             for tag in note.tags:
-                tag_orm = (
-                    db_session.query(TagORM).filter(TagORM.id == str(tag.id)).first()
-                )
+                tag_orm = db_session.query(TagORM).filter(TagORM.id == tag.id).first()
                 if tag_orm:
                     db_note.tags.append(tag_orm)
 
+            logger.info(f"Committing update for note {note.id}")
             db_session.commit()
             db_session.refresh(db_note)
 
+            logger.info(f"Successfully updated note {note.id}")
             return self._orm_to_domain_entity(db_note)
 
         except Exception as e:
@@ -178,15 +183,15 @@ class SQLAlchemyNoteRepository(NoteRepository):
         self, db_session: Session, note_id: UUID, user_id: UUID
     ) -> bool:
         """Soft delete a note (mark as deleted).
-        
+
         Args:
             db_session (Session): Database session.
             note_id (UUID): The ID of the note to delete.
             user_id (UUID): The ID of the user who owns the note.
-            
+
         Returns:
             bool: True if the note was successfully deleted, False if not found.
-            
+
         Raises:
             RepositoryError: If there's an error deleting the note.
         """
@@ -194,8 +199,8 @@ class SQLAlchemyNoteRepository(NoteRepository):
             db_note = (
                 db_session.query(NoteORM)
                 .filter(
-                    NoteORM.id == str(note_id),
-                    NoteORM.owner_id == str(user_id),
+                    NoteORM.id == note_id,
+                    NoteORM.owner_id == user_id,
                     ~NoteORM.is_deleted,
                 )
                 .first()
@@ -224,17 +229,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
         """Get paginated list of all user's notes.
-        
+
         Args:
             db_session (Session): Database session.
             user_id (UUID): The ID of the user whose notes to retrieve.
             page (int): Page number (1-based).
             limit (int): Number of notes per page.
             tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
-            
+
         Returns:
             Tuple[List[Note], int]: A tuple containing the list of notes and total count.
-            
+
         Raises:
             RepositoryError: If there's an error retrieving the notes.
         """
@@ -243,19 +248,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
 
             # Base query for user's notes
             base_query = db_session.query(NoteORM).filter(
-                NoteORM.owner_id == str(user_id), ~NoteORM.is_deleted
+                NoteORM.owner_id == user_id, ~NoteORM.is_deleted
             )
 
             # Add tag filtering if provided
             if tag_ids:
-                str_tag_ids = [str(tag_id) for tag_id in tag_ids]
+                # tag_ids are already UUID objects, no need to convert to strings
                 base_query = (
                     base_query.join(note_tags)
-                    .filter(note_tags.c.tag_id.in_(str_tag_ids))
+                    .filter(note_tags.c.tag_id.in_(tag_ids))
                     .group_by(NoteORM.id)
-                    .having(
-                        func.count(distinct(note_tags.c.tag_id)) == len(str_tag_ids)
-                    )
+                    .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
                 )
 
             # Get total count
@@ -287,17 +290,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
         """Get user's private notes (not shared with others).
-        
+
         Args:
             db_session (Session): Database session.
             user_id (UUID): The ID of the user whose private notes to retrieve.
             page (int): Page number (1-based).
             limit (int): Number of notes per page.
             tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
-            
+
         Returns:
             Tuple[List[Note], int]: A tuple containing the list of private notes and total count.
-            
+
         Raises:
             RepositoryError: If there's an error retrieving the notes.
         """
@@ -307,27 +310,25 @@ class SQLAlchemyNoteRepository(NoteRepository):
             # Get note IDs that are shared (to exclude them)
             shared_note_ids_subquery = (
                 db_session.query(NoteShareORM.note_id)
-                .filter(NoteShareORM.shared_by_user_id == str(user_id))
+                .filter(NoteShareORM.shared_by_user_id == user_id)
                 .subquery()
             )
 
             # Base query for user's private notes
             base_query = db_session.query(NoteORM).filter(
-                NoteORM.owner_id == str(user_id),
+                NoteORM.owner_id == user_id,
                 ~NoteORM.is_deleted,
                 ~NoteORM.id.in_(db_session.query(shared_note_ids_subquery.c.note_id)),
             )
 
             # Add tag filtering if provided
             if tag_ids:
-                str_tag_ids = [str(tag_id) for tag_id in tag_ids]
+                # tag_ids are already UUID objects, no need to convert to strings
                 base_query = (
                     base_query.join(note_tags)
-                    .filter(note_tags.c.tag_id.in_(str_tag_ids))
+                    .filter(note_tags.c.tag_id.in_(tag_ids))
                     .group_by(NoteORM.id)
-                    .having(
-                        func.count(distinct(note_tags.c.tag_id)) == len(str_tag_ids)
-                    )
+                    .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
                 )
 
             # Get total count
@@ -359,17 +360,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
         """Get notes owned by user that are shared with others.
-        
+
         Args:
             db_session (Session): Database session.
             user_id (UUID): The ID of the user who owns the shared notes.
             page (int): Page number (1-based).
             limit (int): Number of notes per page.
             tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
-            
+
         Returns:
             Tuple[List[Note], int]: A tuple containing the list of shared notes and total count.
-            
+
         Raises:
             RepositoryError: If there's an error retrieving the notes.
         """
@@ -379,27 +380,25 @@ class SQLAlchemyNoteRepository(NoteRepository):
             # Get notes that are owned by user AND shared
             shared_note_ids_subquery = (
                 db_session.query(NoteShareORM.note_id)
-                .filter(NoteShareORM.shared_by_user_id == str(user_id))
+                .filter(NoteShareORM.shared_by_user_id == user_id)
                 .subquery()
             )
 
             # Base query
             base_query = db_session.query(NoteORM).filter(
-                NoteORM.owner_id == str(user_id),
+                NoteORM.owner_id == user_id,
                 ~NoteORM.is_deleted,
                 NoteORM.id.in_(db_session.query(shared_note_ids_subquery.c.note_id)),
             )
 
             # Add tag filtering if provided
             if tag_ids:
-                str_tag_ids = [str(tag_id) for tag_id in tag_ids]
+                # tag_ids are already UUID objects, no need to convert to strings
                 base_query = (
                     base_query.join(note_tags)
-                    .filter(note_tags.c.tag_id.in_(str_tag_ids))
+                    .filter(note_tags.c.tag_id.in_(tag_ids))
                     .group_by(NoteORM.id)
-                    .having(
-                        func.count(distinct(note_tags.c.tag_id)) == len(str_tag_ids)
-                    )
+                    .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
                 )
 
             # Get total count
@@ -431,17 +430,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
         """Get notes shared with the user (not owned by them).
-        
+
         Args:
             db_session (Session): Database session.
             user_id (UUID): The ID of the user with whom notes are shared.
             page (int): Page number (1-based).
             limit (int): Number of notes per page.
             tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
-            
+
         Returns:
             Tuple[List[Note], int]: A tuple containing the list of notes shared with the user and total count.
-            
+
         Raises:
             RepositoryError: If there's an error retrieving the notes.
         """
@@ -451,7 +450,7 @@ class SQLAlchemyNoteRepository(NoteRepository):
             # Get notes shared WITH user
             shared_note_ids_subquery = (
                 db_session.query(NoteShareORM.note_id)
-                .filter(NoteShareORM.shared_with_user_id == str(user_id))
+                .filter(NoteShareORM.shared_with_user_id == user_id)
                 .subquery()
             )
 
@@ -463,14 +462,12 @@ class SQLAlchemyNoteRepository(NoteRepository):
 
             # Add tag filtering if provided
             if tag_ids:
-                str_tag_ids = [str(tag_id) for tag_id in tag_ids]
+                # tag_ids are already UUID objects, no need to convert to strings
                 base_query = (
                     base_query.join(note_tags)
-                    .filter(note_tags.c.tag_id.in_(str_tag_ids))
+                    .filter(note_tags.c.tag_id.in_(tag_ids))
                     .group_by(NoteORM.id)
-                    .having(
-                        func.count(distinct(note_tags.c.tag_id)) == len(str_tag_ids)
-                    )
+                    .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
                 )
 
             # Get total count
@@ -501,16 +498,16 @@ class SQLAlchemyNoteRepository(NoteRepository):
         shared_with_user_ids: List[UUID],
     ) -> bool:
         """Share a note with multiple users.
-        
+
         Args:
             db_session (Session): Database session.
             note_id (UUID): The ID of the note to share.
             shared_by_user_id (UUID): The ID of the user sharing the note.
             shared_with_user_ids (List[UUID]): List of user IDs to share the note with.
-            
+
         Returns:
             bool: True if the note was successfully shared, False otherwise.
-            
+
         Raises:
             RepositoryError: If there's an error sharing the note.
         """
@@ -519,8 +516,8 @@ class SQLAlchemyNoteRepository(NoteRepository):
             note_exists = (
                 db_session.query(NoteORM)
                 .filter(
-                    NoteORM.id == str(note_id),
-                    NoteORM.owner_id == str(shared_by_user_id),
+                    NoteORM.id == note_id,
+                    NoteORM.owner_id == shared_by_user_id,
                     ~NoteORM.is_deleted,
                 )
                 .first()
@@ -535,17 +532,17 @@ class SQLAlchemyNoteRepository(NoteRepository):
                 existing_share = (
                     db_session.query(NoteShareORM)
                     .filter(
-                        NoteShareORM.note_id == str(note_id),
-                        NoteShareORM.shared_with_user_id == str(shared_with_user_id),
+                        NoteShareORM.note_id == note_id,
+                        NoteShareORM.shared_with_user_id == shared_with_user_id,
                     )
                     .first()
                 )
 
                 if not existing_share:
                     db_share = NoteShareORM(
-                        note_id=str(note_id),
-                        shared_by_user_id=str(shared_by_user_id),
-                        shared_with_user_id=str(shared_with_user_id),
+                        note_id=note_id,
+                        shared_by_user_id=shared_by_user_id,
+                        shared_with_user_id=shared_with_user_id,
                     )
                     db_session.add(db_share)
 
@@ -569,9 +566,9 @@ class SQLAlchemyNoteRepository(NoteRepository):
             db_share = (
                 db_session.query(NoteShareORM)
                 .filter(
-                    NoteShareORM.note_id == str(note_id),
-                    NoteShareORM.shared_by_user_id == str(shared_by_user_id),
-                    NoteShareORM.shared_with_user_id == str(shared_with_user_id),
+                    NoteShareORM.note_id == note_id,
+                    NoteShareORM.shared_by_user_id == shared_by_user_id,
+                    NoteShareORM.shared_with_user_id == shared_with_user_id,
                 )
                 .first()
             )
@@ -597,8 +594,8 @@ class SQLAlchemyNoteRepository(NoteRepository):
             note_exists = (
                 db_session.query(NoteORM)
                 .filter(
-                    NoteORM.id == str(note_id),
-                    NoteORM.owner_id == str(user_id),
+                    NoteORM.id == note_id,
+                    NoteORM.owner_id == user_id,
                     ~NoteORM.is_deleted,
                 )
                 .first()
@@ -610,7 +607,7 @@ class SQLAlchemyNoteRepository(NoteRepository):
             # Get all shares
             shares = (
                 db_session.query(NoteShareORM)
-                .filter(NoteShareORM.note_id == str(note_id))
+                .filter(NoteShareORM.note_id == note_id)
                 .all()
             )
 
@@ -635,14 +632,15 @@ class SQLAlchemyNoteRepository(NoteRepository):
         # Convert tags
         tag_entities = []
         for tag_orm in note_orm.tags:
-            tag_entity = TagEntity(id=UUID(tag_orm.id), name=tag_orm.name)
+            # tag_orm.id is already a UUID object due to as_uuid=True
+            tag_entity = TagEntity(id=tag_orm.id, name=tag_orm.name)
             tag_entities.append(tag_entity)
 
         return Note(
-            id=UUID(note_orm.id),
+            id=note_orm.id,
             title=note_orm.title,
             content=note_orm.content,
-            owner_id=UUID(note_orm.owner_id),
+            owner_id=note_orm.owner_id,
             tags=tag_entities,
             created_at=note_orm.created_at,
             updated_at=note_orm.updated_at,

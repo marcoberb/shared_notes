@@ -14,6 +14,7 @@ Architecture:
 
 import logging
 from typing import Generator
+from uuid import UUID
 
 from domain.services.note_service import NoteService
 from domain.services.search_service import SearchService
@@ -58,27 +59,32 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def get_current_user_id(request: Request) -> str:
+def get_current_user_id(request: Request) -> UUID:
     """Extract user ID from request headers.
 
     Args:
         request (Request): FastAPI request object containing headers.
 
     Returns:
-        str: User ID extracted from X-User-ID header.
+        UUID: User ID extracted from X-User-ID header.
 
     Raises:
         HTTPException: 401 if X-User-ID header is missing.
+        HTTPException: 400 if X-User-ID header contains invalid UUID.
 
     Example:
         >>> user_id = get_current_user_id(request)
         >>> print(user_id)
-        "keycloak-user-uuid"
+        UUID('keycloak-user-uuid')
     """
-    user_id = request.headers.get("X-User-ID")
-    if not user_id:
+    user_id_str = request.headers.get("X-User-ID")
+    if not user_id_str:
         raise HTTPException(status_code=401, detail="User ID not found in headers")
-    return user_id
+
+    try:
+        return UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
 
 
 def get_tag_service() -> TagService:

@@ -83,7 +83,9 @@ class NoteORM(Base):
 
     # Owner identification (Keycloak user ID)
     owner_id = Column(
-        String(255), nullable=False, comment="Keycloak user UUID who owns the note"
+        UUID(as_uuid=True),
+        nullable=False,
+        comment="Keycloak user UUID who owns the note",
     )
 
     # Timestamps

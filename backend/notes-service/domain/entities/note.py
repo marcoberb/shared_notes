@@ -44,7 +44,7 @@ class Note:
 
     def __post_init__(self):
         """Validate note after initialization.
-        
+
         Raises:
             ValueError: If note title or content are empty.
         """

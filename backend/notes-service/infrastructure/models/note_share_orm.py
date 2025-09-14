@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 
 from infrastructure.models.base import Base
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Column, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -83,12 +83,14 @@ class NoteShareORM(Base):
 
     # User who shared the note (Keycloak UUID)
     shared_by_user_id = Column(
-        String(255), nullable=False, comment="Keycloak UUID of user who shared the note"
+        UUID(as_uuid=True),
+        nullable=False,
+        comment="Keycloak UUID of user who shared the note",
     )
 
     # User who receives the share (Keycloak UUID)
     shared_with_user_id = Column(
-        String(255),
+        UUID(as_uuid=True),
         nullable=False,
         comment="Keycloak UUID of user who receives the share",
     )

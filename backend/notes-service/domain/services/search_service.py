@@ -102,9 +102,6 @@ class SearchService:
         # Validation is already handled in SearchCriteria.__post_init__
         # but we can add additional business rules here if needed
 
-        if criteria.has_text_search() and len(criteria.query.strip()) < 2:
-            raise ValueError("Search query must be at least 2 characters long")
-
         if criteria.has_tag_filter() and len(criteria.tag_ids) > 10:
             raise ValueError("Cannot filter by more than 10 tags at once")
 
