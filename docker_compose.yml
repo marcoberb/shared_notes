@@ -1,5 +1,5 @@
 services:
-  # Database Service (PostgreSQL)
+  # Database Service
   postgres:
     image: postgres:15-alpine
     container_name: sharednotes-postgres
@@ -42,8 +42,70 @@ services:
       - --import-realm
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    depends_on:
+      - postgres
     networks:
       - sharednotes-network
+
+  # Backend Services
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: sharednotes-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=sharednotes
+      - KEYCLOAK_CLIENT_ID=sharednotes-api
+      - NOTES_SERVICE_URL=http://notes-service:8002
+    depends_on:
+      - keycloak
+      - notes-service
+    networks:
+      - sharednotes-network
+
+  notes-service:
+    build:
+      context: ./backend/notes-service
+      dockerfile: Dockerfile
+    container_name: sharednotes-notes
+    ports:
+      - "8002:8002"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/sharednotes
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=sharednotes
+      - KEYCLOAK_ADMIN_CLIENT_ID=admin-cli
+      - KEYCLOAK_ADMIN_USERNAME=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin123
+    depends_on:
+      - postgres
+      - keycloak
+    networks:
+      - sharednotes-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sharednotes-frontend
+    ports:
+      - "3000:3000"  # HTTP redirect to HTTPS
+      - "3443:3443"  # HTTPS frontend entry point
+    volumes:
+      - ./certs:/app/certs:ro  # Mount SSL certificates
+    depends_on:
+      - api-gateway
+    networks:
+      - sharednotes-network
+
+volumes:
+  postgres_data:
 
 networks:
   sharednotes-network:
