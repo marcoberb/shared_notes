@@ -7,10 +7,9 @@ between the API layer (Pydantic) and the domain layer (entities).
 from typing import List
 from uuid import UUID
 
-from domain.entities.tag import TagEntity
-
 from application.rest.schemas.input.tag_input import TagCreate, TagUpdate
 from application.rest.schemas.output.tag_output import TagResponse
+from domain.entities.tag import TagEntity
 
 
 class TagConverter:

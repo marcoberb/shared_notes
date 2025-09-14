@@ -8,13 +8,12 @@ from typing import List, Optional
 from uuid import UUID
 
 from domain.entities.tag import TagEntity
-from domain.repositories.tag_repository import TagRepositoryInterface
+from domain.repositories.tag_repository import TagRepository
+from infrastructure.models.tag_orm import TagORM
 from sqlalchemy.orm import Session
 
-from infrastructure.models.tag_orm import TagORM
 
-
-class SqlAlchemyTagRepository(TagRepositoryInterface):
+class SqlAlchemyTagRepository(TagRepository):
     """SQLAlchemy implementation of the tag repository.
 
     This class implements the TagRepositoryInterface using SQLAlchemy

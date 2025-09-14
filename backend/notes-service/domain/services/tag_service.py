@@ -7,10 +7,9 @@ for tag operations, orchestrating between entities and repositories.
 from typing import List
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
 from domain.entities.tag import TagEntity
-from domain.repositories.tag_repository import TagRepositoryInterface
+from domain.repositories.tag_repository import TagRepository
+from sqlalchemy.orm import Session
 
 
 class TagService:
@@ -31,7 +30,7 @@ class TagService:
         5
     """
 
-    def __init__(self, tag_repository: TagRepositoryInterface) -> None:
+    def __init__(self, tag_repository: TagRepository) -> None:
         """Initialize the tag service with required dependencies.
 
         Args:

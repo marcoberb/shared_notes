@@ -15,7 +15,11 @@ Architecture:
 import logging
 from typing import Generator
 
+from domain.services.tag_service import TagService
 from fastapi import HTTPException, Request
+from infrastructure.repositories.sqlalchemy_tag_repository import (
+    SqlAlchemyTagRepository,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -68,3 +72,17 @@ def get_current_user_id(request: Request) -> str:
     if not user_id:
         raise HTTPException(status_code=401, detail="User ID not found in headers")
     return user_id
+
+
+def get_tag_service() -> TagService:
+    """Create and configure the tag service with repository dependency.
+
+    This factory function creates the domain service with its repository dependency.
+    The session is injected per-request in each endpoint method.
+
+    Returns:
+        TagService: Configured domain service ready for use.
+    """
+    tag_repository = SqlAlchemyTagRepository()
+
+    return TagService(tag_repository)

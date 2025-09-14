@@ -4,25 +4,20 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import distinct, func
+from sqlalchemy.orm import Session
+
 from infrastructure.models.associations import note_tags
 from infrastructure.models.note_orm import NoteORM
 from infrastructure.models.note_share_orm import NoteShareORM
 from infrastructure.models.tag_orm import TagORM
-from sqlalchemy import distinct, func
-from sqlalchemy.orm import Session
 from utils.dependencies import get_current_user_id, get_db
 from utils.keycloak import get_user_email_by_id, get_user_id_by_email
-
+from application.utils import convert_note_to_response
 from application.rest.schemas.input.note_input import NoteCreate, NoteUpdate
 from application.rest.schemas.input.share_input import ShareRequest
 from application.rest.schemas.output.common_output import ErrorResponse
-from application.rest.schemas.output.note_output import (
-    NoteResponse,
-    NotesListResponse,
-    PaginationInfo,
-)
-from application.utils import convert_note_to_response
-
+from application.rest.schemas.output.note_output import NoteResponse, NotesListResponse, PaginationInfo
 from ..schemas.output.share_output import NoteSharesResponse, ShareResponse
 
 logger = logging.getLogger(__name__)

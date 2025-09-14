@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..entities.tag import TagEntity
 
 
-class TagRepositoryInterface(ABC):
+class TagRepository(ABC):
     """Abstract interface for tag repository operations.
 
     This interface defines the contract for tag data access

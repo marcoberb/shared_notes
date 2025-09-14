@@ -1,40 +1,20 @@
 from typing import List
 from uuid import UUID
 
+from application.converters.tag_converter import TagConverter
+from application.rest.schemas.input.tag_input import TagCreate, TagUpdate
+from application.rest.schemas.output.common_output import ErrorResponse
+from application.rest.schemas.output.tag_output import TagResponse
 from domain.services.tag_service import (
     TagAlreadyExistsError,
     TagNotFoundError,
     TagService,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
-from infrastructure.repositories.sqlalchemy_tag_repository import (
-    SqlAlchemyTagRepository,
-)
 from sqlalchemy.orm import Session
-from utils.dependencies import get_db
-
-from application.converters.tag_converter import TagConverter
-from application.rest.schemas.input.tag_input import TagCreate, TagUpdate
-from application.rest.schemas.output.common_output import ErrorResponse
-from application.rest.schemas.output.tag_output import TagResponse
+from utils.dependencies import get_db, get_tag_service
 
 router = APIRouter()
-
-
-def get_tag_service() -> TagService:
-    """Create and configure the tag service with repository dependency.
-
-    This factory function creates the domain service with its repository dependency.
-    The session is injected per-request in each endpoint method.
-
-    Returns:
-        TagService: Configured domain service ready for use.
-    """
-    # Infrastructure layer: SQLAlchemy repository (no session stored)
-    tag_repository = SqlAlchemyTagRepository()
-
-    # Domain layer: Domain service with business logic
-    return TagService(tag_repository)
 
 
 @router.get(
