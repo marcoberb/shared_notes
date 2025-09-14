@@ -672,12 +672,14 @@ const Dashboard = () => {
                   >
                     Visualizza
                   </button>
-                  <button 
-                    onClick={() => handleDeleteNote(note.id)}
-                    className="btn btn-sm btn-danger"
-                  >
-                    Elimina
-                  </button>
+                  {activeSection !== 'shared-with-me' && (
+                    <button 
+                      onClick={() => handleDeleteNote(note.id)}
+                      className="btn btn-sm btn-danger"
+                    >
+                      Elimina
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="note-content">
@@ -755,7 +757,7 @@ const Dashboard = () => {
                 <h2>{selectedNote.title}</h2>
               )}
               <div className="modal-header-actions">
-                {!isEditing && (
+                {!isEditing && activeSection !== 'shared-with-me' && (
                   <button 
                     onClick={handleEditNote}
                     className="btn btn-sm btn-secondary"
