@@ -20,7 +20,7 @@ export const linkifyText = (text) => {
     
     const url = match[0];
     
-    const href = url.startsWith('www.') ? `https:
+    const href = url.startsWith('www.') ? `https://${url}` : url;
     parts.push({
       type: 'link',
       url: href,

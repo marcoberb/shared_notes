@@ -46,17 +46,15 @@ const Dashboard = () => {
   const [modalError, setModalError] = useState(null);
   const { user, logout } = useAuth();
 
-  
   const loadAllTags = async () => {
     try {
       const tagsData = await tagsService.getAllTags();
       setAllTags(tagsData);
     } catch (error) {
-      
+      console.error('Error loading tags:', error);
     }
   };
 
-  
   const loadAllSectionCounts = async () => {
     try {
       const sections = ['my-notes', 'shared-by-me', 'shared-with-me'];
@@ -80,19 +78,18 @@ const Dashboard = () => {
       
       setSectionCounts(counts);
     } catch (error) {
-      
+      console.error('Error loading section counts:', error);
     }
   };
 
   useEffect(() => {
-    loadAllSectionCounts(); 
-    loadAllTags(); 
+    loadAllSectionCounts();
+    loadAllTags();
     loadNotes(currentPage, activeSection);
   }, [currentPage, activeSection]);
 
-  
   useEffect(() => {
-    setCurrentPage(1); 
+    setCurrentPage(1);
     loadNotes(1, activeSection);
   }, [selectedFilterTags]);
 
@@ -100,7 +97,6 @@ const Dashboard = () => {
     try {
       setLoading(true);
       let response;
-      
       
       const tagsParam = selectedFilterTags.length > 0 ? selectedFilterTags.join(',') : null;
       
@@ -131,7 +127,6 @@ const Dashboard = () => {
       
       setPagination(paginationData);
       
-      
       setSectionCounts(prev => ({
         ...prev,
         [section]: paginationData.total_notes
@@ -144,7 +139,6 @@ const Dashboard = () => {
   };
 
   const handleSearch = async (page = 1) => {
-    
     if (page && page.preventDefault) {
       page.preventDefault();
       page = 1;
@@ -179,29 +173,24 @@ const Dashboard = () => {
   const handleSectionChange = (section) => {
     setActiveSection(section);
     setCurrentPage(1);
-    setSearchQuery(''); 
-    setSelectedFilterTags([]); 
+    setSearchQuery('');
+    setSelectedFilterTags([]);
   };
 
-  
   const handleTagFilterToggle = (tagId) => {
     setSelectedFilterTags(prev => {
       if (prev.includes(tagId)) {
-        
         return prev.filter(id => id !== tagId);
       } else {
-        
         return [...prev, tagId];
       }
     });
   };
 
-  
   const clearTagFilters = () => {
     setSelectedFilterTags([]);
   };
 
-  
   const loadNoteShares = async (noteId) => {
     try {
       const response = await shareService.getNoteShares(noteId);
@@ -215,12 +204,11 @@ const Dashboard = () => {
     const email = emailInput.trim().toLowerCase();
     if (email && isValidEmail(email) && selectedNote) {
       try {
-        setModalError(null); 
+        setModalError(null);
         await shareService.shareNote(selectedNote.id, [email]);
         setEmailInput('');
-        await loadNoteShares(selectedNote.id); 
-      } catch (error) {        
-        
+        await loadNoteShares(selectedNote.id);
+      } catch (error) {
         let errorMessage = 'Errore nella condivisione della nota';
         if (error.response?.data?.detail) {
           errorMessage = error.response.data.detail;
@@ -236,11 +224,10 @@ const Dashboard = () => {
   const removeEmailShare = async (email) => {
     if (selectedNote) {
       try {
-        setModalError(null); 
+        setModalError(null);
         await shareService.removeShareByEmail(selectedNote.id, email);
-        await loadNoteShares(selectedNote.id); 
-      } catch (error) {        
-        
+        await loadNoteShares(selectedNote.id);
+      } catch (error) {
         let errorMessage = 'Errore nella rimozione della condivisione';
         if (error.response?.data?.detail) {
           errorMessage = error.response.data.detail;
@@ -271,7 +258,6 @@ const Dashboard = () => {
 
     try {
       await notesService.deleteNote(noteId);
-      
       loadNotes(currentPage, activeSection);
     } catch (error) {
       setError('Errore nell\'eliminazione della nota');
@@ -283,7 +269,6 @@ const Dashboard = () => {
     setEditedTitle(note.title);
     setEditedContent(note.content);
     
-    
     if (note.tags) {
       const tagIds = note.tags.length && typeof note.tags[0] === 'object'
         ? note.tags.map(t => t.id.toString())
@@ -293,13 +278,12 @@ const Dashboard = () => {
       setSelectedTags([]);
     }
     
-    
     await loadNoteShares(note.id);
     
     setIsEditing(false);
     setHasChanges(false);
-    setEmailInput(''); 
-    setModalError(null); 
+    setEmailInput('');
+    setModalError(null);
     setShowModal(true);
   };
 
@@ -322,7 +306,7 @@ const Dashboard = () => {
     setSelectedTags([]);
     setHasChanges(false);
     setSaving(false);
-    setModalError(null); 
+    setModalError(null);
   };
 
   const handleEditNote = () => {
@@ -376,11 +360,9 @@ const Dashboard = () => {
         tags: selectedTags.map(id => parseInt(id, 10))
       });
       
-      
       setNotes(notes.map(note => 
         note.id === selectedNote.id ? updatedNote : note
       ));
-      
       
       setSelectedNote(updatedNote);
       setIsEditing(false);
@@ -430,7 +412,6 @@ const Dashboard = () => {
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(pagination.total_pages, startPage + maxVisiblePages - 1);
     
-    
     if (endPage - startPage + 1 < maxVisiblePages) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
@@ -476,6 +457,41 @@ const Dashboard = () => {
           </Link>
         </div>
       </header>
+
+      <div className="section-tabs">
+        <button 
+          className={`btn ${activeSection === 'my-notes' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => handleSectionChange('my-notes')}
+        >
+          Le mie note ({sectionCounts['my-notes']})
+        </button>
+        <button 
+          className={`btn ${activeSection === 'shared-by-me' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => handleSectionChange('shared-by-me')}
+        >
+          Condivise da me ({sectionCounts['shared-by-me']})
+        </button>
+        <button 
+          className={`btn ${activeSection === 'shared-with-me' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => handleSectionChange('shared-with-me')}
+        >
+          Condivise con me ({sectionCounts['shared-with-me']})
+        </button>
+      </div>
+
+      <div className="search-section">
+        <form onSubmit={handleSearch} className="search-form">
+          <input
+            type="text"
+            placeholder="Cerca note..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+          <button type="submit" className="btn">
+            🔍 Cerca
+          </button>
+        </form>
 
         {allTags.length > 0 && (
           <div className="tag-filters" style={{ marginTop: '15px' }}>
@@ -599,6 +615,28 @@ const Dashboard = () => {
         )}
       </div>
 
+      {pagination.total_pages > 1 && (
+        <div className="pagination">
+          <button 
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!pagination.has_previous}
+            className="pagination-btn"
+          >
+            ← Precedente
+          </button>
+          
+          {renderPaginationNumbers()}
+          
+          <button 
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!pagination.has_next}
+            className="pagination-btn"
+          >
+            Successiva →
+          </button>
+        </div>
+      )}
+
       {showModal && selectedNote && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -660,7 +698,7 @@ const Dashboard = () => {
                     <LinkifiedTextarea
                       value={editedContent}
                       onChange={handleContentChange}
-                      placeholder="Contenuto della nota...&#10;&#10;💡 URL (http:
+                      placeholder="Contenuto della nota...&#10;&#10;💡 URL (http://, https://, www.) verranno automaticamente convertiti in link cliccabili!"
                       rows={15}
                       style={{ width: '100%', marginBottom: '20px' }}
                     />
@@ -672,6 +710,47 @@ const Dashboard = () => {
                         disabled={false}
                       />
                     </div>
+
+                    <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                      <h4 style={{ marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Gestione condivisioni</h4>
+                      
+                      {noteShares.length > 0 && (
+                        <div style={{ marginBottom: '15px' }}>
+                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                            Attualmente condivisa con:
+                          </label>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {noteShares.map((share, index) => (
+                              <div key={index} style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                backgroundColor: 'white',
+                                border: '1px solid #dee2e6',
+                                borderRadius: '4px',
+                                fontSize: '14px'
+                              }}>
+                                <span>{share.shared_with_email}</span>
+                                <button
+                                  onClick={() => removeEmailShare(share.shared_with_email)}
+                                  style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    fontSize: '12px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Rimuovi
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {modalError && (
                         <div style={{
@@ -697,7 +776,6 @@ const Dashboard = () => {
                             value={emailInput}
                             onChange={(e) => {
                               setEmailInput(e.target.value);
-                              
                               if (modalError) {
                                 setModalError(null);
                               }
@@ -739,7 +817,8 @@ const Dashboard = () => {
                     whiteSpace: 'pre-wrap', 
                     fontFamily: 'inherit',
                     lineHeight: 1.6,
-                    wordBreak: 'break-word'
+                    wordBreak: 'break-word',
+                    textAlign: 'left'
                   }}>
                     {renderMultilineTextWithLinks(selectedNote.content)}
                   </div>
