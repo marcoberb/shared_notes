@@ -6,7 +6,7 @@ This module contains Pydantic models for search response output serialization.
 from datetime import datetime
 from typing import List
 
-from note_output import NoteResponse, NotesListResponse
+from application.rest.schemas.output.note_output import NoteResponse, PaginationInfo
 from pydantic import BaseModel
 
 
@@ -26,46 +26,28 @@ class SearchResultResponse(BaseModel):
     """
 
     notes: List[NoteResponse]
-    pagination: dict  # PaginationInfo from note_output
+    pagination: PaginationInfo
     search_timestamp: datetime
     search_query: str
     search_section: str
     total_results: int
 
-    class Config:
-        """Pydantic model configuration."""
+    @classmethod
+    def from_entity(cls, search_result) -> "SearchResultResponse":
+        """Convert domain SearchResult to API response SearchResultResponse.
 
-        schema_extra = {
-            "example": {
-                "notes": [
-                    {
-                        "id": "123e4567-e89b-12d3-a456-426614174000",
-                        "title": "Work Meeting Notes",
-                        "content": "Discussed project timeline and deliverables",
-                        "owner_id": "user123",
-                        "tags": [
-                            {"id": "tag1", "name": "work"},
-                            {"id": "tag2", "name": "meeting"},
-                        ],
-                        "created_at": "2024-01-01T10:00:00Z",
-                        "updated_at": "2024-01-01T11:00:00Z",
-                    }
-                ],
-                "pagination": {
-                    "current_page": 1,
-                    "total_pages": 3,
-                    "total_notes": 42,
-                    "notes_per_page": 15,
-                    "has_next": True,
-                    "has_previous": False,
-                },
-                "search_timestamp": "2024-01-01T12:00:00Z",
-                "search_query": "work meeting",
-                "search_section": "my-notes",
-                "total_results": 42,
-            }
-        }
+        Args:
+            search_result: Domain search result entity.
 
+        Returns:
+            SearchResultResponse: Complete search response with metadata.
+        """
 
-# For compatibility, we can also expose the existing NotesListResponse
-__all__ = ["SearchResultResponse", "NotesListResponse"]
+        return cls(
+            notes=[NoteResponse.from_entity(note) for note in search_result.notes],
+            pagination=PaginationInfo.from_entity(search_result.pagination),
+            search_timestamp=search_result.search_timestamp,
+            search_query=search_result.criteria.query or "",
+            search_section=search_result.criteria.section.value,
+            total_results=search_result.pagination.total_notes,
+        )

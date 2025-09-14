@@ -8,7 +8,7 @@ from typing import Annotated, Union
 
 from application.rest.schemas.input.search_input import SearchNotesRequest
 from application.rest.schemas.output.common_output import ErrorResponse
-from application.rest.schemas.output.note_output import NotesListResponse
+from application.rest.schemas.output.search_output import SearchResultResponse
 from domain.entities.search import SearchCriteria
 from domain.services.search_service import SearchError, SearchService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,12 +23,12 @@ router = APIRouter()
 @router.get(
     path="/search",
     description="Search notes using full-text search and tag filtering across different sections.",
-    response_model=NotesListResponse,
+    response_model=SearchResultResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {
-            "model": NotesListResponse,
-            "description": "List of notes matching search criteria with pagination.",
+            "model": SearchResultResponse,
+            "description": "Search results with notes, pagination, and search metadata.",
         },
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
@@ -71,7 +71,7 @@ async def search_notes(
     ] = 15,
     search_service: SearchService = Depends(get_search_service),
     db: Session = Depends(get_db),
-) -> NotesListResponse:
+) -> SearchResultResponse:
     """Search notes with optional text query and tag filters.
 
     Args:
@@ -85,7 +85,7 @@ async def search_notes(
         db: Database session dependency
 
     Returns:
-        NotesListResponse: Paginated list of matching notes
+        SearchResultResponse: Complete search results with metadata and pagination
 
     Raises:
         HTTPException: 400 for invalid parameters, 401 for auth errors, 500 for server errors
@@ -106,7 +106,7 @@ async def search_notes(
         search_service.validate_search_criteria(search_criteria)
 
         search_result = await search_service.search_notes(db, search_criteria)
-        response = NotesListResponse.from_search_result(search_result)
+        response = SearchResultResponse.from_entity(search_result)
 
         logger.info(
             f"Search completed: found {len(search_result.notes)} notes "

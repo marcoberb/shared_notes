@@ -15,9 +15,13 @@ Architecture:
 import logging
 from typing import Generator
 
+from domain.services.note_service import NoteService
 from domain.services.search_service import SearchService
 from domain.services.tag_service import TagService
 from fastapi import HTTPException, Request
+from infrastructure.repositories.sqlalchemy_note_repository import (
+    SQLAlchemyNoteRepository,
+)
 from infrastructure.repositories.sqlalchemy_search_repository import (
     SQLAlchemySearchRepository,
 )
@@ -104,3 +108,16 @@ def get_search_service() -> SearchService:
     """
     search_repository = SQLAlchemySearchRepository()
     return SearchService(search_repository)
+
+
+def get_note_service() -> NoteService:
+    """Create NoteService instance with dependencies.
+
+    This factory function creates the domain service with its repository dependency.
+    The session is injected per-request in each endpoint method.
+
+    Returns:
+        NoteService: Configured domain service ready for use.
+    """
+    note_repository = SQLAlchemyNoteRepository()
+    return NoteService(note_repository)

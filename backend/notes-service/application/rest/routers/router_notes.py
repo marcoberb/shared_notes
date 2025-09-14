@@ -4,7 +4,6 @@ This module contains the FastAPI router for note operations.
 
 import logging
 import uuid
-from datetime import datetime
 from typing import Optional
 
 from application.rest.schemas.input.note_input import NoteCreate, NoteUpdate
@@ -19,15 +18,16 @@ from application.rest.schemas.output.share_output import (
     NoteSharesResponse,
     ShareResponse,
 )
-from application.utils import convert_note_to_response
+from domain.services.note_service import NoteError, NoteNotFoundError, NoteService
+from domain.services.tag_service import TagService
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from infrastructure.models.associations import note_tags
-from infrastructure.models.note_orm import NoteORM
-from infrastructure.models.note_share_orm import NoteShareORM
-from infrastructure.models.tag_orm import TagORM
-from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
-from utils.dependencies import get_current_user_id, get_db
+from utils.dependencies import (
+    get_current_user_id,
+    get_db,
+    get_note_service,
+    get_tag_service,
+)
 from utils.keycloak import get_user_email_by_id, get_user_id_by_email
 
 logger = logging.getLogger(__name__)
@@ -61,14 +61,21 @@ router = APIRouter()
     },
 )
 async def get_notes(
-    request: Request, page: int = 1, limit: int = 10, db: Session = Depends(get_db)
-):
-    """Get all notes for the current user with pagination.
+    request: Request,
+    page: int = 1,
+    limit: int = 10,
+    tag_ids: Optional[str] = None,
+    note_service: NoteService = Depends(get_note_service),
+    db: Session = Depends(get_db),
+) -> NotesListResponse:
+    """Retrieve all notes for the current user with pagination support.
 
     Args:
         request (Request): FastAPI request object containing user headers.
         page (int, optional): Page number for pagination. Defaults to 1.
         limit (int, optional): Number of notes per page. Defaults to 10.
+        tag_ids (str, optional): Comma-separated tag UUIDs for filtering.
+        note_service: Note service dependency
         db (Session): Database session dependency injected by FastAPI.
 
     Returns:
@@ -83,51 +90,45 @@ async def get_notes(
         >>> print(f"Total notes: {len(result.notes)}")
         Total notes: 5
     """
-    user_id = get_current_user_id(request)
-    logger.info(f"Getting notes for user_id: {user_id}, page: {page}, limit: {limit}")
+    try:
+        user_id = uuid.UUID(get_current_user_id(request))
+        logger.info(
+            f"Getting notes for user_id: {user_id}, page: {page}, limit: {limit}"
+        )
 
-    # Calculate offset
-    offset = (page - 1) * limit
+        # Parse tag_ids if provided
+        tag_uuids = None
+        if tag_ids:
+            try:
+                tag_uuids = [uuid.UUID(tag_id.strip()) for tag_id in tag_ids.split(",")]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid tag ID format")
 
-    # Get total count
-    total_notes = (
-        db.query(NoteORM)
-        .filter(NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .count()
-    )
+        notes, pagination = await note_service.get_user_notes_paginated(
+            db, user_id, page, limit, tag_uuids
+        )
 
-    # Calculate pagination info
-    total_pages = (total_notes + limit - 1) // limit  # Ceiling division
-    has_next = page < total_pages
-    has_previous = page > 1
+        note_responses = [NoteResponse.from_entity(note) for note in notes]
 
-    # Get notes for current page
-    notes = (
-        db.query(NoteORM)
-        .filter(NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .order_by(NoteORM.updated_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+        response = NotesListResponse(
+            notes=note_responses,
+            pagination=PaginationInfo.from_entity(pagination),
+        )
 
-    logger.info(f"Found {len(notes)} notes for user {user_id} on page {page}")
+        logger.info(f"Returning {len(note_responses)} notes for user {user_id}")
+        return response
 
-    notes_list = []
-    for note in notes:
-        notes_list.append(convert_note_to_response(note))
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    pagination = PaginationInfo(
-        current_page=page,
-        total_pages=total_pages,
-        total_notes=total_notes,
-        notes_per_page=limit,
-        has_next=has_next,
-        has_previous=has_previous,
-    )
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve notes")
 
-    logger.info(f"Returning {len(notes_list)} notes with pagination: {pagination}")
-    return NotesListResponse(notes=notes_list, pagination=pagination)
+    except Exception as e:
+        logger.error(f"Unexpected error getting notes: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -164,6 +165,7 @@ async def get_my_notes(
     limit: int = 15,
     tags: Optional[str] = None,  # Comma-separated tag IDs for filtering
     db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Get paginated list of user's own notes that are NOT shared with others.
 
@@ -173,6 +175,7 @@ async def get_my_notes(
         limit (int, optional): Number of notes per page. Defaults to 15.
         tags (Optional[str], optional): Comma-separated tag UUIDs for filtering. Defaults to None.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         NotesListResponse: Paginated list of user's private notes with pagination metadata.
@@ -188,77 +191,53 @@ async def get_my_notes(
         Private notes: 3
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Getting my notes for user {user_id}, page {page}, limit {limit}")
 
-    # Parse tag IDs from query parameter
-    tag_ids = []
-    if tags:
-        try:
-            tag_ids = [
-                uuid.UUID(tag_id.strip())
-                for tag_id in tags.split(",")
-                if tag_id.strip()
-            ]
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid UUID format for tag IDs"
-            )
+    try:
+        # Parse tag IDs from query parameter
+        tag_ids = []
+        if tags:
+            try:
+                tag_ids = [
+                    uuid.UUID(tag_id.strip())
+                    for tag_id in tags.split(",")
+                    if tag_id.strip()
+                ]
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid UUID format for tag IDs"
+                )
 
-    # Calculate offset
-    offset = (page - 1) * limit
-
-    # Get note IDs that are shared (to exclude them)
-    shared_note_ids_subquery = (
-        db.query(NoteShareORM.note_id)
-        .filter(NoteShareORM.shared_by_user_id == user_id)
-        .subquery()
-    )
-
-    # Base query for user's own notes that are NOT shared
-    base_query = db.query(NoteORM).filter(
-        NoteORM.owner_id == user_id,
-        ~NoteORM.is_deleted,
-        ~NoteORM.id.in_(db.query(shared_note_ids_subquery.c.note_id)),
-    )
-
-    # Add tag filtering if provided (AND logic - note must have ALL selected tags)
-    if tag_ids:
-        base_query = (
-            base_query.join(note_tags)
-            .filter(note_tags.c.tag_id.in_(tag_ids))
-            .group_by(NoteORM.id)
-            .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
+        # Use domain service to get paginated notes
+        notes, pagination = await note_service.get_my_notes_paginated(
+            db_session=db,
+            user_id=user_id,
+            page=page,
+            limit=limit,
+            tag_ids=tag_ids,
         )
 
-    # Get total count
-    total_notes = base_query.count()
+        note_responses = [NoteResponse.from_entity(note) for note in notes]
 
-    # Get notes for current page
-    notes = (
-        base_query.order_by(NoteORM.updated_at.desc()).offset(offset).limit(limit).all()
-    )
+        response = NotesListResponse(
+            notes=note_responses,
+            pagination=PaginationInfo.from_entity(pagination),
+        )
 
-    # Calculate pagination info
-    total_pages = (total_notes + limit - 1) // limit
-    has_next = page < total_pages
-    has_previous = page > 1
+        logger.info(f"Returning {len(note_responses)} my notes for user {user_id}")
+        return response
 
-    notes_list = []
-    for note in notes:
-        notes_list.append(convert_note_to_response(note))
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    pagination = PaginationInfo(
-        current_page=page,
-        total_pages=total_pages,
-        total_notes=total_notes,
-        notes_per_page=limit,
-        has_next=has_next,
-        has_previous=has_previous,
-    )
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve my notes")
 
-    logger.info(
-        f"Returning {len(notes_list)} my notes for user {user_id} on page {page}"
-    )
-    return NotesListResponse(notes=notes_list, pagination=pagination)
+    except Exception as e:
+        logger.error(f"Unexpected error getting my notes: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -295,6 +274,7 @@ async def get_notes_shared_by_me(
     limit: int = 15,
     tags: Optional[str] = None,  # Comma-separated tag IDs for filtering
     db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Get notes owned by user that ARE shared with others.
 
@@ -304,6 +284,7 @@ async def get_notes_shared_by_me(
         limit (int, optional): Number of notes per page. Defaults to 15.
         tags (Optional[str], optional): Comma-separated tag UUIDs for filtering. Defaults to None.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         NotesListResponse: Paginated list of notes shared by the user with pagination metadata.
@@ -320,77 +301,54 @@ async def get_notes_shared_by_me(
     """
     user_id = get_current_user_id(request)
     logger.info(
-        f"Getting notes shared by me for user_id: {user_id}, page: {page}, limit: {limit}"
+        f"Getting notes shared by me for user {user_id}, page {page}, limit {limit}"
     )
 
-    # Parse tag IDs from query parameter
-    tag_ids = []
-    if tags:
-        try:
-            tag_ids = [
-                uuid.UUID(tag_id.strip())
-                for tag_id in tags.split(",")
-                if tag_id.strip()
-            ]
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid UUID format for tag IDs"
-            )
+    try:
+        # Parse tag IDs from query parameter
+        tag_ids = []
+        if tags:
+            try:
+                tag_ids = [
+                    uuid.UUID(tag_id.strip())
+                    for tag_id in tags.split(",")
+                    if tag_id.strip()
+                ]
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid UUID format for tag IDs"
+                )
 
-    # Calculate offset
-    offset = (page - 1) * limit
-
-    # Get notes that are owned by user AND shared (present in note_shares)
-    subquery = (
-        db.query(NoteShareORM.note_id)
-        .filter(NoteShareORM.shared_by_user_id == user_id)
-        .subquery()
-    )
-
-    # Base query
-    base_query = db.query(NoteORM).filter(
-        NoteORM.owner_id == user_id,
-        ~NoteORM.is_deleted,
-        NoteORM.id.in_(db.query(subquery.c.note_id)),
-    )
-
-    # Add tag filtering if provided (AND logic - note must have ALL selected tags)
-    if tag_ids:
-        base_query = (
-            base_query.join(note_tags)
-            .filter(note_tags.c.tag_id.in_(tag_ids))
-            .group_by(NoteORM.id)
-            .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
+        # Use domain service to get paginated notes
+        notes, pagination = await note_service.get_notes_shared_by_me_paginated(
+            db_session=db,
+            user_id=user_id,
+            page=page,
+            limit=limit,
+            tag_ids=tag_ids,
         )
 
-    # Get total count
-    total_notes = base_query.count()
+        note_responses = [NoteResponse.from_entity(note) for note in notes]
 
-    # Get notes for current page
-    notes = (
-        base_query.order_by(NoteORM.updated_at.desc()).offset(offset).limit(limit).all()
-    )
+        response = NotesListResponse(
+            notes=note_responses,
+            pagination=PaginationInfo.from_entity(pagination),
+        )
 
-    # Calculate pagination info
-    total_pages = (total_notes + limit - 1) // limit
-    has_next = page < total_pages
-    has_previous = page > 1
+        logger.info(f"Returning {len(note_responses)} notes shared by me")
+        return response
 
-    notes_list = []
-    for note in notes:
-        notes_list.append(convert_note_to_response(note))
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    pagination = PaginationInfo(
-        current_page=page,
-        total_pages=total_pages,
-        total_notes=total_notes,
-        notes_per_page=limit,
-        has_next=has_next,
-        has_previous=has_previous,
-    )
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve shared notes")
 
-    logger.info(f"Returning {len(notes_list)} notes shared by me")
-    return NotesListResponse(notes=notes_list, pagination=pagination)
+    except Exception as e:
+        logger.error(f"Unexpected error getting shared notes: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -427,6 +385,7 @@ async def get_notes_shared_with_me(
     limit: int = 15,
     tags: Optional[str] = None,  # Comma-separated tag IDs for filtering
     db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Get notes shared WITH the current user (not owned by them).
 
@@ -436,6 +395,7 @@ async def get_notes_shared_with_me(
         limit (int, optional): Number of notes per page. Defaults to 15.
         tags (Optional[str], optional): Comma-separated tag UUIDs for filtering. Defaults to None.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         NotesListResponse: Paginated list of notes shared with the user with pagination metadata.
@@ -452,75 +412,54 @@ async def get_notes_shared_with_me(
     """
     user_id = get_current_user_id(request)
     logger.info(
-        f"Getting notes shared with me for user_id: {user_id}, page: {page}, limit: {limit}"
+        f"Getting notes shared with me for user {user_id}, page {page}, limit {limit}"
     )
 
-    # Parse tag IDs from query parameter
-    tag_ids = []
-    if tags:
-        try:
-            tag_ids = [
-                uuid.UUID(tag_id.strip())
-                for tag_id in tags.split(",")
-                if tag_id.strip()
-            ]
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid UUID format for tag IDs"
-            )
+    try:
+        # Parse tag IDs from query parameter
+        tag_ids = []
+        if tags:
+            try:
+                tag_ids = [
+                    uuid.UUID(tag_id.strip())
+                    for tag_id in tags.split(",")
+                    if tag_id.strip()
+                ]
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid UUID format for tag IDs"
+                )
 
-    # Calculate offset
-    offset = (page - 1) * limit
-
-    # Get notes shared WITH user (not owned by user)
-    subquery = (
-        db.query(NoteShareORM.note_id)
-        .filter(NoteShareORM.shared_with_user_id == user_id)
-        .subquery()
-    )
-
-    # Base query
-    base_query = db.query(NoteORM).filter(
-        ~NoteORM.is_deleted, NoteORM.id.in_(db.query(subquery.c.note_id))
-    )
-
-    # Add tag filtering if provided (AND logic - note must have ALL selected tags)
-    if tag_ids:
-        base_query = (
-            base_query.join(note_tags)
-            .filter(note_tags.c.tag_id.in_(tag_ids))
-            .group_by(NoteORM.id)
-            .having(func.count(distinct(note_tags.c.tag_id)) == len(tag_ids))
+        # Use domain service to get paginated notes
+        notes, pagination = await note_service.get_notes_shared_with_me_paginated(
+            db_session=db,
+            user_id=user_id,
+            page=page,
+            limit=limit,
+            tag_ids=tag_ids,
         )
 
-    # Get total count
-    total_notes = base_query.count()
+        note_responses = [NoteResponse.from_entity(note) for note in notes]
 
-    # Get notes for current page
-    notes = (
-        base_query.order_by(NoteORM.updated_at.desc()).offset(offset).limit(limit).all()
-    )
+        response = NotesListResponse(
+            notes=note_responses,
+            pagination=PaginationInfo.from_entity(pagination),
+        )
 
-    # Calculate pagination info
-    total_pages = (total_notes + limit - 1) // limit
-    has_next = page < total_pages
-    has_previous = page > 1
+        logger.info(f"Returning {len(note_responses)} notes shared with me")
+        return response
 
-    notes_list = []
-    for note in notes:
-        notes_list.append(convert_note_to_response(note))
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    pagination = PaginationInfo(
-        current_page=page,
-        total_pages=total_pages,
-        total_notes=total_notes,
-        notes_per_page=limit,
-        has_next=has_next,
-        has_previous=has_previous,
-    )
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve shared notes")
 
-    logger.info(f"Returning {len(notes_list)} notes shared with me")
-    return NotesListResponse(notes=notes_list, pagination=pagination)
+    except Exception as e:
+        logger.error(f"Unexpected error getting shared notes: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -570,13 +509,19 @@ async def get_notes_shared_with_me(
         },
     },
 )
-async def get_note(note_id: str, request: Request, db: Session = Depends(get_db)):
+async def get_note(
+    note_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
+):
     """Get a specific note by ID.
 
     Args:
         note_id (str): UUID of the note to retrieve.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         NoteResponse: Note details including title, content, tags, and metadata.
@@ -592,17 +537,41 @@ async def get_note(note_id: str, request: Request, db: Session = Depends(get_db)
         "My Important Note"
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Getting note {note_id} for user {user_id}")
 
-    note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
-    )
+    try:
+        # Parse note UUID
+        try:
+            note_uuid = uuid.UUID(note_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
 
-    if not note:
+        # Use domain service to get note
+        note = await note_service.get_note(
+            db_session=db,
+            note_id=note_uuid,
+            user_id=user_id,
+        )
+
+        response = NoteResponse.from_entity(note)
+        logger.info(f"Retrieved note {note_id} successfully")
+        return response
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    return convert_note_to_response(note)
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve note")
+
+    except Exception as e:
+        logger.error(f"Unexpected error getting note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post(
@@ -641,7 +610,11 @@ async def get_note(note_id: str, request: Request, db: Session = Depends(get_db)
     },
 )
 async def create_note(
-    note: NoteCreate, request: Request, db: Session = Depends(get_db)
+    note: NoteCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
+    tag_service: TagService = Depends(get_tag_service),
 ):
     """Create a new note with optional tags and sharing.
 
@@ -649,6 +622,8 @@ async def create_note(
         note (NoteCreate): Note creation data including title, content, tags, and share emails.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
+        tag_service (TagService): Domain service for tag operations.
 
     Returns:
         NoteResponse: Created note details including assigned UUID and metadata.
@@ -665,56 +640,75 @@ async def create_note(
         "uuid-new-note"
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Creating note for user {user_id}")
 
-    # Create note
-    db_note = NoteORM(title=note.title, content=note.content, owner_id=user_id)
+    try:
+        # Convert tag IDs to tag entities
+        tag_entities = []
+        if note.tags:
+            # Get all tags from repository and filter by requested IDs
+            all_tags = await tag_service.get_all_tags(db)
+            tag_entities = [tag for tag in all_tags if tag.id in note.tags]
 
-    # Handle tags (now by ID)
-    if note.tags:
-        for tag_id in note.tags:
-            tag = db.query(TagORM).filter(TagORM.id == tag_id).first()
-            if tag:
-                db_note.tags.append(tag)
-
-    db.add(db_note)
-    db.commit()
-    db.refresh(db_note)
-
-    # Handle sharing during creation
-    if note.share_emails:
-        for email in note.share_emails:
-            # Resolve email to Keycloak user ID
-            shared_with_user_id = await get_user_id_by_email(email)
-
-            if not shared_with_user_id:
-                # Rollback the note creation
-                db.delete(db_note)
-                db.commit()
+            # Validate that all requested tags exist
+            found_tag_ids = {tag.id for tag in tag_entities}
+            requested_tag_ids = set(note.tags)
+            missing_tags = requested_tag_ids - found_tag_ids
+            if missing_tags:
                 raise HTTPException(
-                    status_code=400, detail=f"Utente non trovato per l'email: {email}"
+                    status_code=400, detail=f"Tags not found: {list(missing_tags)}"
                 )
 
-            # Check if already shared with this user (shouldn't happen during creation, but safety check)
-            existing_share = (
-                db.query(NoteShareORM)
-                .filter(
-                    NoteShareORM.note_id == db_note.id,
-                    NoteShareORM.shared_with_user_id == shared_with_user_id,
-                )
-                .first()
-            )
+        # Use domain service to create note
+        created_note = await note_service.create_note(
+            db_session=db,
+            title=note.title,
+            content=note.content,
+            owner_id=user_id,
+            tag_entities=tag_entities,
+        )
 
-            if not existing_share:
-                db_share = NoteShareORM(
-                    note_id=db_note.id,
-                    shared_by_user_id=user_id,
-                    shared_with_user_id=shared_with_user_id,
-                )
-                db.add(db_share)
+        # Handle sharing during creation
+        if note.share_emails:
+            for email in note.share_emails:
+                try:
+                    # Resolve email to Keycloak user ID
+                    shared_with_user_id = await get_user_id_by_email(email)
 
-        db.commit()
+                    if not shared_with_user_id:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Utente non trovato per l'email: {email}",
+                        )
 
-    return convert_note_to_response(db_note)
+                    # Use domain service to share note
+                    await note_service.share_note(
+                        db_session=db,
+                        note_id=created_note.id,
+                        shared_by_user_id=user_id,
+                        shared_with_user_id=shared_with_user_id,
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to share note with {email}: {str(e)}")
+                    # For creation, we continue even if sharing fails
+                    # The note is created but sharing fails for specific users
+
+        response = NoteResponse.from_entity(created_note)
+        logger.info(f"Successfully created note {created_note.id}")
+        return response
+
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create note")
+
+    except Exception as e:
+        logger.error(f"Unexpected error creating note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put(
@@ -769,6 +763,8 @@ async def update_note(
     note_update: NoteUpdate,
     request: Request,
     db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
+    tag_service: TagService = Depends(get_tag_service),
 ):
     """Update an existing note.
 
@@ -777,6 +773,8 @@ async def update_note(
         note_update (NoteUpdate): Updated note data with optional title, content, and tags.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
+        tag_service (TagService): Domain service for tag operations.
 
     Returns:
         NoteResponse: Updated note details with new timestamp.
@@ -793,35 +791,60 @@ async def update_note(
         "Updated Title"
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Updating note {note_id} for user {user_id}")
 
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
-    )
+    try:
+        # Parse note UUID
+        try:
+            note_uuid = uuid.UUID(note_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
 
-    if not db_note:
+        # Convert tag IDs to tag entities if provided
+        tag_entities = None
+        if note_update.tags is not None:
+            # Get all tags from repository and filter by requested IDs
+            all_tags = await tag_service.get_all_tags(db)
+            tag_entities = [tag for tag in all_tags if tag.id in note_update.tags]
+
+            # Validate that all requested tags exist
+            found_tag_ids = {tag.id for tag in tag_entities}
+            requested_tag_ids = set(note_update.tags)
+            missing_tags = requested_tag_ids - found_tag_ids
+            if missing_tags:
+                raise HTTPException(
+                    status_code=400, detail=f"Tags not found: {list(missing_tags)}"
+                )
+
+        # Use domain service to update note
+        updated_note = await note_service.update_note(
+            db_session=db,
+            note_id=note_uuid,
+            user_id=user_id,
+            title=note_update.title,
+            content=note_update.content,
+            tag_entities=tag_entities,
+        )
+
+        response = NoteResponse.from_entity(updated_note)
+        logger.info(f"Successfully updated note {note_id}")
+        return response
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Update fields
-    if note_update.title is not None:
-        db_note.title = note_update.title
-    if note_update.content is not None:
-        db_note.content = note_update.content
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    # Update tags
-    if note_update.tags is not None:
-        db_note.tags.clear()
-        for tag_id in note_update.tags:
-            tag = db.query(TagORM).filter(TagORM.id == tag_id).first()
-            if tag:
-                db_note.tags.append(tag)
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update note")
 
-    db_note.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(db_note)
-
-    return convert_note_to_response(db_note)
+    except Exception as e:
+        logger.error(f"Unexpected error updating note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete(
@@ -869,13 +892,19 @@ async def update_note(
         },
     },
 )
-async def delete_note(note_id: str, request: Request, db: Session = Depends(get_db)):
+async def delete_note(
+    note_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
+):
     """Delete a note (soft delete).
 
     Args:
         note_id (str): UUID of the note to delete.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         dict: Success message confirming deletion.
@@ -891,21 +920,44 @@ async def delete_note(note_id: str, request: Request, db: Session = Depends(get_
         "Note deleted successfully"
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Deleting note {note_id} for user {user_id}")
 
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
-    )
+    try:
+        # Parse note UUID
+        try:
+            note_uuid = uuid.UUID(note_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
 
-    if not db_note:
+        # Use domain service to delete note
+        success = await note_service.delete_note(
+            db_session=db,
+            note_id=note_uuid,
+            user_id=user_id,
+        )
+
+        if success:
+            logger.info(f"Successfully deleted note {note_id}")
+            return {"message": "Note deleted successfully"}
+        else:
+            logger.warning(f"Failed to delete note {note_id}")
+            raise HTTPException(status_code=500, detail="Failed to delete note")
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    db_note.is_deleted = True
-    db_note.updated_at = datetime.utcnow()
-    db.commit()
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return {"message": "Note deleted successfully"}
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete note")
+
+    except Exception as e:
+        logger.error(f"Unexpected error deleting note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Share endpoints
@@ -972,6 +1024,7 @@ async def share_note(
     share_request: ShareRequest,
     request: Request,
     db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Share a note with one or more users by email.
 
@@ -980,6 +1033,7 @@ async def share_note(
         share_request (ShareRequest): Request containing note ID and list of emails to share with.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         NoteSharesResponse: All current shares for the note including newly created ones.
@@ -997,80 +1051,90 @@ async def share_note(
         1
     """
     user_id = get_current_user_id(request)
-
-    # Verify that the note exists and is owned by the current user
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
+    logger.info(
+        f"Sharing note {note_id} for user {user_id} with {len(share_request.emails)} recipients"
     )
 
-    if not db_note:
+    try:
+        # Parse note UUID
+        try:
+            note_uuid = uuid.UUID(note_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+        # Validate that note_id in request matches URL parameter
+        if share_request.note_id != note_id:
+            raise HTTPException(status_code=400, detail="Note ID mismatch")
+
+        # First validate all emails exist in Keycloak before creating any shares
+        validated_user_ids = []
+        for email in share_request.emails:
+            shared_with_user_id = await get_user_id_by_email(email)
+            if not shared_with_user_id:
+                raise HTTPException(
+                    status_code=400, detail=f"Utente non trovato per l'email: {email}"
+                )
+            validated_user_ids.append(shared_with_user_id)
+
+        # Share note with each validated user using domain service
+        for shared_with_user_id in validated_user_ids:
+            try:
+                await note_service.share_note(
+                    db_session=db,
+                    note_id=note_uuid,
+                    shared_by_user_id=user_id,
+                    shared_with_user_id=shared_with_user_id,
+                )
+            except NoteError as e:
+                # Skip if already shared - this is not an error in this context
+                logger.info(
+                    f"Note already shared with user {shared_with_user_id}: {str(e)}"
+                )
+                continue
+
+        # Get all current shares for the note using domain service
+        shares = await note_service.get_note_shares(
+            db_session=db,
+            note_id=note_uuid,
+            user_id=user_id,
+        )
+
+        # Build response with emails
+        shares_response = []
+        for share in shares:
+            shared_email = await get_user_email_by_id(share.shared_with_user_id)
+            shares_response.append(
+                ShareResponse(
+                    id=str(share.id),
+                    note_id=str(share.note_id),
+                    shared_by_user_id=share.shared_by_user_id,
+                    shared_with_user_id=share.shared_with_user_id,
+                    shared_with_email=shared_email or "Email not found",
+                    created_at=share.created_at,
+                )
+            )
+
+        response = NoteSharesResponse(note_id=str(note_id), shares=shares_response)
+        logger.info(
+            f"Successfully shared note {note_id} with {len(validated_user_ids)} users"
+        )
+        return response
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Validate that note_id in request matches URL parameter
-    if share_request.note_id != note_id:
-        raise HTTPException(status_code=400, detail="Note ID mismatch")
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    created_shares = []
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to share note")
 
-    # First validate all emails exist in Keycloak before creating any shares
-    for email in share_request.emails:
-        shared_with_user_id = await get_user_id_by_email(email)
-        if not shared_with_user_id:
-            raise HTTPException(
-                status_code=400, detail=f"Utente non trovato per l'email: {email}"
-            )
-
-    # If all emails are valid, proceed with sharing
-    for email in share_request.emails:
-        # Resolve email to Keycloak user ID (we know it exists now)
-        shared_with_user_id = await get_user_id_by_email(email)
-
-        # Check if already shared with this user
-        existing_share = (
-            db.query(NoteShareORM)
-            .filter(
-                NoteShareORM.note_id == note_id,
-                NoteShareORM.shared_with_user_id == shared_with_user_id,
-            )
-            .first()
-        )
-
-        if existing_share:
-            continue  # Skip if already shared
-
-        # Create new share
-        db_share = NoteShareORM(
-            note_id=note_id,
-            shared_by_user_id=user_id,
-            shared_with_user_id=shared_with_user_id,
-        )
-
-        db.add(db_share)
-        created_shares.append(db_share)
-
-    db.commit()
-
-    # Return all shares for this note with emails
-    all_shares = db.query(NoteShareORM).filter(NoteShareORM.note_id == note_id).all()
-    shares_response = []
-
-    for share in all_shares:
-        # Get email for each shared user
-        shared_email = await get_user_email_by_id(share.shared_with_user_id)
-        shares_response.append(
-            ShareResponse(
-                id=str(share.id),
-                note_id=str(share.note_id),
-                shared_by_user_id=share.shared_by_user_id,
-                shared_with_user_id=share.shared_with_user_id,
-                shared_with_email=shared_email or "Email not found",
-                created_at=share.created_at,
-            )
-        )
-
-    return NoteSharesResponse(note_id=str(note_id), shares=shares_response)
+    except Exception as e:
+        logger.error(f"Unexpected error sharing note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -1125,13 +1189,17 @@ async def share_note(
     },
 )
 async def get_note_shares(
-    note_id: str, request: Request, db: Session = Depends(get_db)
-):
+    note_id: str,
+    request: Request,
+    note_service: NoteService = Depends(get_note_service),
+    db: Session = Depends(get_db),
+) -> NoteSharesResponse:
     """Get all shares for a specific note.
 
     Args:
         note_id (str): UUID of the note to get shares for.
         request (Request): FastAPI request object containing user headers.
+        note_service: Note service dependency
         db (Session): Database session dependency injected by FastAPI.
 
     Returns:
@@ -1147,37 +1215,48 @@ async def get_note_shares(
         >>> print(f"Shared with {len(shares.shares)} users")
         Shared with 2 users
     """
-    user_id = get_current_user_id(request)
+    try:
+        user_id = uuid.UUID(get_current_user_id(request))
+        note_uuid = uuid.UUID(note_id)
 
-    # Verify that the note exists and is owned by the current user
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
-    )
+        logger.info(f"Getting shares for note {note_uuid} by user {user_id}")
 
-    if not db_note:
+        # Use domain service to get shares
+        shares_data = await note_service.get_note_shares(db, note_uuid, user_id)
+
+        # Enrich shares with user emails from Keycloak
+        enriched_shares_data = []
+        for share_data in shares_data:
+            shared_email = await get_user_email_by_id(share_data["shared_with_user_id"])
+            enriched_share = {
+                **share_data,
+                "shared_with_email": shared_email or "Email not found",
+            }
+            enriched_shares_data.append(enriched_share)
+
+        # Use classmethod to convert to response
+        response = NoteSharesResponse.from_shares_data(note_id, enriched_shares_data)
+
+        logger.info(
+            f"Retrieved {len(enriched_shares_data)} shares for note {note_uuid}"
+        )
+        return response
+
+    except ValueError as e:
+        logger.warning(f"Invalid note ID format: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Get all shares for this note
-    shares = db.query(NoteShareORM).filter(NoteShareORM.note_id == note_id).all()
-    shares_response = []
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve note shares")
 
-    for share in shares:
-        # Get email for each shared user
-        shared_email = await get_user_email_by_id(share.shared_with_user_id)
-        shares_response.append(
-            ShareResponse(
-                id=str(share.id),
-                note_id=str(share.note_id),
-                shared_by_user_id=share.shared_by_user_id,
-                shared_with_user_id=share.shared_with_user_id,
-                shared_with_email=shared_email or "Email not found",
-                created_at=share.created_at,
-            )
-        )
-
-    return NoteSharesResponse(note_id=str(note_id), shares=shares_response)
+    except Exception as e:
+        logger.error(f"Unexpected error getting note shares: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete(
@@ -1230,7 +1309,11 @@ async def get_note_shares(
     },
 )
 async def remove_note_share(
-    note_id: str, share_id: str, request: Request, db: Session = Depends(get_db)
+    note_id: str,
+    share_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Remove a specific share from a note by share ID.
 
@@ -1239,6 +1322,7 @@ async def remove_note_share(
         share_id (str): UUID of the specific share to remove.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         dict: Success message confirming share removal.
@@ -1254,31 +1338,63 @@ async def remove_note_share(
         "Share removed successfully"
     """
     user_id = get_current_user_id(request)
+    logger.info(f"Removing share {share_id} from note {note_id} for user {user_id}")
 
-    # Verify that the note exists and is owned by the current user
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
-    )
+    try:
+        # Parse UUIDs
+        try:
+            note_uuid = uuid.UUID(note_id)
+            share_uuid = uuid.UUID(share_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid UUID format")
 
-    if not db_note:
+        # First get the share details to find the shared_with_user_id
+        shares = await note_service.get_note_shares(
+            db_session=db,
+            note_id=note_uuid,
+            user_id=user_id,
+        )
+
+        # Find the specific share by ID
+        target_share = None
+        for share in shares:
+            if share.id == share_uuid:
+                target_share = share
+                break
+
+        if not target_share:
+            raise HTTPException(status_code=404, detail="Share not found")
+
+        # Use domain service to unshare note
+        success = await note_service.unshare_note(
+            db_session=db,
+            note_id=note_uuid,
+            shared_by_user_id=user_id,
+            shared_with_user_id=target_share.shared_with_user_id,
+        )
+
+        if success:
+            logger.info(f"Successfully removed share {share_id}")
+            return {"message": "Share removed successfully"}
+        else:
+            logger.warning(f"Failed to remove share {share_id}")
+            raise HTTPException(status_code=500, detail="Failed to remove share")
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Find the share to delete
-    db_share = (
-        db.query(NoteShareORM)
-        .filter(NoteShareORM.id == share_id, NoteShareORM.note_id == note_id)
-        .first()
-    )
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if not db_share:
-        raise HTTPException(status_code=404, detail="Share not found")
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to remove share")
 
-    db.delete(db_share)
-    db.commit()
-
-    return {"message": "Share removed successfully"}
+    except Exception as e:
+        logger.error(f"Unexpected error removing share: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete(
@@ -1333,7 +1449,11 @@ async def remove_note_share(
     },
 )
 async def remove_note_share_by_email(
-    note_id: str, email: str, request: Request, db: Session = Depends(get_db)
+    note_id: str,
+    email: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    note_service: NoteService = Depends(get_note_service),
 ):
     """Remove a share from a note by email address.
 
@@ -1342,6 +1462,7 @@ async def remove_note_share_by_email(
         email (str): Email address of the user to remove from sharing.
         request (Request): FastAPI request object containing user headers.
         db (Session): Database session dependency injected by FastAPI.
+        note_service (NoteService): Domain service for note operations.
 
     Returns:
         dict: Success message confirming share removal.
@@ -1358,38 +1479,55 @@ async def remove_note_share_by_email(
         "Share removed successfully"
     """
     user_id = get_current_user_id(request)
-
-    # Verify that the note exists and is owned by the current user
-    db_note = (
-        db.query(NoteORM)
-        .filter(NoteORM.id == note_id, NoteORM.owner_id == user_id, ~NoteORM.is_deleted)
-        .first()
+    logger.info(
+        f"Removing share from note {note_id} for email {email} by user {user_id}"
     )
 
-    if not db_note:
+    try:
+        # Parse note UUID
+        try:
+            note_uuid = uuid.UUID(note_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+        # Get user ID from email
+        shared_with_user_id = await get_user_id_by_email(email)
+        if not shared_with_user_id:
+            raise HTTPException(
+                status_code=400, detail=f"User not found for email: {email}"
+            )
+
+        # Use domain service to unshare note
+        success = await note_service.unshare_note(
+            db_session=db,
+            note_id=note_uuid,
+            shared_by_user_id=user_id,
+            shared_with_user_id=shared_with_user_id,
+        )
+
+        if success:
+            logger.info(
+                f"Successfully removed share from note {note_id} for email {email}"
+            )
+            return {"message": "Share removed successfully"}
+        else:
+            logger.warning(
+                f"Failed to remove share from note {note_id} for email {email}"
+            )
+            raise HTTPException(status_code=404, detail="Share not found")
+
+    except NoteNotFoundError as e:
+        logger.warning(f"Note not found: {str(e)}")
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Get user ID from email
-    shared_with_user_id = await get_user_id_by_email(email)
-    if not shared_with_user_id:
-        raise HTTPException(
-            status_code=400, detail=f"User not found for email: {email}"
-        )
+    except ValueError as e:
+        logger.warning(f"Invalid request parameters: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    # Find the share to delete
-    db_share = (
-        db.query(NoteShareORM)
-        .filter(
-            NoteShareORM.note_id == note_id,
-            NoteShareORM.shared_with_user_id == shared_with_user_id,
-        )
-        .first()
-    )
+    except NoteError as e:
+        logger.error(f"Note service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to remove share")
 
-    if not db_share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    db.delete(db_share)
-    db.commit()
-
-    return {"message": "Share removed successfully"}
+    except Exception as e:
+        logger.error(f"Unexpected error removing share: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

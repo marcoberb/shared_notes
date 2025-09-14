@@ -66,7 +66,7 @@ async def get_tags(
     """
     try:
         tag_entities = await tag_service.get_all_tags(db)
-        return [TagResponse.from_tag_entity(tag) for tag in tag_entities]
+        return [TagResponse.from_entity(tag) for tag in tag_entities]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

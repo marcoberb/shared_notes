@@ -50,7 +50,7 @@ class NoteResponse(BaseModel):
     tags: List[TagResponse]
 
     @classmethod
-    def from_note_entity(cls, note: Note) -> NoteResponse:
+    def from_entity(cls, note: Note) -> NoteResponse:
         """Create NoteResponse from Note domain entity.
 
         Args:
@@ -67,7 +67,7 @@ class NoteResponse(BaseModel):
             owner_id=str(note.owner_id),
             created_at=note.created_at,
             updated_at=note.updated_at,
-            tags=[TagResponse.from_tag_entity(tag) for tag in note.tags],
+            tags=[TagResponse.from_entity(tag) for tag in note.tags],
         )
 
 
@@ -101,9 +101,7 @@ class PaginationInfo(BaseModel):
     has_previous: bool
 
     @classmethod
-    def from_pagination_metadata(
-        cls, pagination_metadata: PaginationMetadata
-    ) -> PaginationInfo:
+    def from_entity(cls, pagination_metadata: PaginationMetadata) -> PaginationInfo:
         """Convert domain PaginationMetadata to API response PaginationInfo.
 
         Args:
@@ -140,7 +138,7 @@ class NotesListResponse(BaseModel):
     pagination: PaginationInfo
 
     @classmethod
-    def from_search_result(cls, search_result: SearchResult) -> NotesListResponse:
+    def from_entity(cls, search_result: SearchResult) -> NotesListResponse:
         """Convert domain SearchResult to API response NotesListResponse.
 
         Args:
@@ -150,8 +148,6 @@ class NotesListResponse(BaseModel):
             NotesListResponse: Corresponding API response model.
         """
         return cls(
-            notes=[NoteResponse.from_note_entity(note) for note in search_result.notes],
-            pagination=PaginationInfo.from_pagination_metadata(
-                search_result.pagination
-            ),
+            notes=[NoteResponse.from_entity(note) for note in search_result.notes],
+            pagination=PaginationInfo.from_entity(search_result.pagination),
         )

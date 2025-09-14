@@ -49,6 +49,64 @@ class Note:
         if not self.content.strip():
             raise ValueError("Note content cannot be empty")
 
+    @classmethod
+    def create_new(
+        cls,
+        title: str,
+        content: str,
+        owner_id: UUID,
+        tags: Optional[List["TagEntity"]] = None,
+    ) -> "Note":
+        """Factory method to create a new note with default values.
+
+        Args:
+            title: Title of the note
+            content: Content of the note
+            owner_id: UUID of the note owner
+            tags: Optional list of tags
+
+        Returns:
+            Note: New note instance with generated UUID and timestamps
+
+        Raises:
+            ValueError: If title or content are empty
+        """
+        from uuid import uuid4
+
+        now = datetime.utcnow()
+        return cls(
+            id=uuid4(),
+            title=title.strip(),
+            content=content.strip(),
+            owner_id=owner_id,
+            tags=tags or [],
+            created_at=now,
+            updated_at=now,
+            is_deleted=False,
+        )
+
+    @classmethod
+    def from_creation_request(
+        cls, title: str, content: str, owner_id: UUID, tag_entities: List["TagEntity"]
+    ) -> "Note":
+        """Factory method to create a note from API creation request.
+
+        Args:
+            title: Note title from request
+            content: Note content from request
+            owner_id: UUID of the user creating the note
+            tag_entities: List of tag entities to associate
+
+        Returns:
+            Note: New note instance ready for persistence
+
+        Raises:
+            ValueError: If title or content are invalid
+        """
+        return cls.create_new(
+            title=title, content=content, owner_id=owner_id, tags=tag_entities
+        )
+
     def update_content(self, title: str, content: str) -> None:
         """Update the note's title and content.
 

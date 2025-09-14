@@ -24,7 +24,7 @@ class TagResponse(BaseModel):
     name: str
 
     @classmethod
-    def from_tag_entity(cls, tag_entity: TagEntity) -> TagResponse:
+    def from_entity(cls, tag_entity: TagEntity) -> TagResponse:
         """Create TagResponse from TagEntity.
 
         Args:
