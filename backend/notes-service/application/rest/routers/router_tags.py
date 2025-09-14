@@ -1,3 +1,7 @@
+"""
+This module contains the FastAPI router for tags operations.
+"""
+
 from typing import List
 
 from application.rest.schemas.output.common_output import ErrorResponse

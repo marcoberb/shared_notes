@@ -1,3 +1,7 @@
+"""
+This module contains the FastAPI router for note operations.
+"""
+
 import logging
 import uuid
 from datetime import datetime

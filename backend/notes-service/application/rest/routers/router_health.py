@@ -1,3 +1,7 @@
+"""
+This module contains the FastAPI router for health check operations.
+"""
+
 from application.rest.schemas.output.common_output import ErrorResponse, HealthResponse
 from fastapi import APIRouter, status
 

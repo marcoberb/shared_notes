@@ -3,6 +3,8 @@
 This module contains Pydantic models for tag-related API responses.
 """
 
+from __future__ import annotations
+
 from domain.entities.tag import TagEntity
 from pydantic import BaseModel
 
@@ -21,7 +23,8 @@ class TagResponse(BaseModel):
     id: str  # UUID as string
     name: str
 
-    def from_tag_entity(tag_entity: TagEntity) -> "TagResponse":
+    @classmethod
+    def from_tag_entity(cls, tag_entity: TagEntity) -> TagResponse:
         """Create TagResponse from TagEntity.
 
         Args:
@@ -32,4 +35,4 @@ class TagResponse(BaseModel):
         """
         if tag_entity.is_new():
             raise ValueError("Cannot convert new tag entity to response (no ID)")
-        return TagResponse(id=str(tag_entity.id), name=tag_entity.name)
+        return cls(id=str(tag_entity.id), name=tag_entity.name)

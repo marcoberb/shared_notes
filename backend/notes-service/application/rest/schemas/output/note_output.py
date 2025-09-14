@@ -4,10 +4,17 @@ This module contains Pydantic models for note-related API responses,
 including single notes, pagination info, and note lists.
 """
 
-from datetime import datetime
-from typing import List
+from __future__ import annotations
 
+from datetime import datetime
+from typing import TYPE_CHECKING, List
+
+from application.rest.schemas.output.tag_output import TagResponse
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from domain.entities.note import Note
+    from domain.entities.search import PaginationMetadata, SearchResult
 
 
 class NoteResponse(BaseModel):
@@ -40,7 +47,28 @@ class NoteResponse(BaseModel):
     owner_id: str  # Keycloak UUID
     created_at: datetime
     updated_at: datetime
-    tags: List[dict]  # Will be List[TagResponse] at runtime
+    tags: List[TagResponse]
+
+    @classmethod
+    def from_note_entity(cls, note: Note) -> NoteResponse:
+        """Create NoteResponse from Note domain entity.
+
+        Args:
+            note: The domain Note entity to convert
+
+        Returns:
+            NoteResponse: The converted note response schema
+        """
+
+        return cls(
+            id=str(note.id),
+            title=note.title,
+            content=note.content,
+            owner_id=str(note.owner_id),
+            created_at=note.created_at,
+            updated_at=note.updated_at,
+            tags=[TagResponse.from_tag_entity(tag) for tag in note.tags],
+        )
 
 
 class PaginationInfo(BaseModel):
@@ -72,6 +100,27 @@ class PaginationInfo(BaseModel):
     has_next: bool
     has_previous: bool
 
+    @classmethod
+    def from_pagination_metadata(
+        cls, pagination_metadata: PaginationMetadata
+    ) -> PaginationInfo:
+        """Convert domain PaginationMetadata to API response PaginationInfo.
+
+        Args:
+            pagination_metadata: Domain pagination metadata entity.
+
+        Returns:
+            PaginationInfo: Corresponding API response model.
+        """
+        return cls(
+            current_page=pagination_metadata.current_page,
+            total_pages=pagination_metadata.total_pages,
+            total_notes=pagination_metadata.total_notes,
+            notes_per_page=pagination_metadata.notes_per_page,
+            has_next=pagination_metadata.has_next,
+            has_previous=pagination_metadata.has_previous,
+        )
+
 
 class NotesListResponse(BaseModel):
     """Schema for paginated notes list API responses.
@@ -89,3 +138,20 @@ class NotesListResponse(BaseModel):
 
     notes: List[NoteResponse]
     pagination: PaginationInfo
+
+    @classmethod
+    def from_search_result(cls, search_result: SearchResult) -> NotesListResponse:
+        """Convert domain SearchResult to API response NotesListResponse.
+
+        Args:
+            search_result: Domain search result entity.
+
+        Returns:
+            NotesListResponse: Corresponding API response model.
+        """
+        return cls(
+            notes=[NoteResponse.from_note_entity(note) for note in search_result.notes],
+            pagination=PaginationInfo.from_pagination_metadata(
+                search_result.pagination
+            ),
+        )
