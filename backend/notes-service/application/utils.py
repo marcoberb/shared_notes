@@ -1,9 +1,7 @@
 from application.rest.schemas.output.note_output import NoteResponse
 from application.rest.schemas.output.share_output import ShareResponse
-from application.rest.schemas.output.tag_output import TagResponse
 from infrastructure.models.note_orm import NoteORM
 from infrastructure.models.note_share_orm import NoteShareORM
-from infrastructure.models.tag_orm import TagORM
 
 
 def convert_note_to_response(note: NoteORM) -> NoteResponse:
@@ -31,24 +29,6 @@ def convert_note_to_response(note: NoteORM) -> NoteResponse:
         updated_at=note.updated_at,
         tags=tags,
     )
-
-
-def convert_tag_to_response(tag: TagORM) -> TagResponse:
-    """Convert Tag model to TagResponse with proper UUID handling.
-
-    Args:
-        tag: SQLAlchemy Tag model instance.
-
-    Returns:
-        TagResponse: Pydantic model with string UUID and tag data.
-
-    Example:
-        >>> tag = db.query(Tag).first()
-        >>> response = convert_tag_to_response(tag)
-        >>> print(response.name)
-        "work"
-    """
-    return TagResponse(id=str(tag.id), name=tag.name)
 
 
 def convert_share_to_response(

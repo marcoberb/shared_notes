@@ -83,6 +83,8 @@ def get_tag_service() -> TagService:
     Returns:
         TagService: Configured domain service ready for use.
     """
+    # Infrastructure layer: SQLAlchemy repository (no session stored)
     tag_repository = SqlAlchemyTagRepository()
 
+    # Domain layer: Domain service with business logic
     return TagService(tag_repository)

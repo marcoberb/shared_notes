@@ -18,11 +18,10 @@ Architecture:
 import uuid
 from datetime import datetime
 
+from infrastructure.models.base import Base
 from sqlalchemy import Boolean, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-
-from infrastructure.models.base import Base
 
 
 class NoteORM(Base):

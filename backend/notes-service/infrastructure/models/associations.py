@@ -11,10 +11,9 @@ Architecture:
     by SQLAlchemy to manage many-to-many relationships automatically.
 """
 
+from infrastructure.models.base import Base
 from sqlalchemy import Column, ForeignKey, Table
 from sqlalchemy.dialects.postgresql import UUID
-
-from infrastructure.models.base import Base
 
 note_tags = Table(
     "note_tags",

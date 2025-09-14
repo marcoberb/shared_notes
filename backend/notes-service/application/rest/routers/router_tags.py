@@ -1,7 +1,6 @@
 from typing import List
 from uuid import UUID
 
-from application.converters.tag_converter import TagConverter
 from application.rest.schemas.input.tag_input import TagCreate, TagUpdate
 from application.rest.schemas.output.common_output import ErrorResponse
 from application.rest.schemas.output.tag_output import TagResponse
@@ -66,11 +65,8 @@ async def get_tags(
         ['personal', 'work']
     """
     try:
-        # Get domain entities from domain service (with fresh session)
         tag_entities = await tag_service.get_all_tags(db)
-
-        # Convert to response schemas using converter
-        return TagConverter.entities_to_responses(tag_entities)
+        return [TagResponse.from_tag_entity(tag) for tag in tag_entities]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -132,11 +128,9 @@ async def create_tag(
         "urgent"
     """
     try:
-        # Create tag using domain service (with fresh session)
         created_entity = await tag_service.create_tag(db, tag_create.name)
 
-        # Convert result to response schema
-        return TagConverter.entity_to_response(created_entity)
+        return TagResponse.from_tag_entity(created_entity)
     except TagAlreadyExistsError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -217,12 +211,10 @@ async def get_tag_by_id(
         "work"
     """
     try:
-        # Convert string to UUID and get domain entity
         tag_uuid = UUID(tag_id)
         tag_entity = await tag_service.get_tag_by_id(db, tag_uuid)
 
-        # Convert to response schema
-        return TagConverter.entity_to_response(tag_entity)
+        return TagResponse.from_tag_entity(tag_entity)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -305,12 +297,10 @@ async def update_tag(
         "important"
     """
     try:
-        # Convert string to UUID and update using domain service
         tag_uuid = UUID(tag_id)
         updated_entity = await tag_service.update_tag(db, tag_uuid, tag_update.name)
 
-        # Convert result to response schema
-        return TagConverter.entity_to_response(updated_entity)
+        return TagResponse.from_tag_entity(updated_entity)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

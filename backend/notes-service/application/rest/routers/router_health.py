@@ -1,6 +1,5 @@
+from application.rest.schemas.output.common_output import ErrorResponse, HealthResponse
 from fastapi import APIRouter, status
-
-from ..schemas.output.common_output import ErrorResponse, HealthResponse
 
 router = APIRouter()
 
