@@ -15,6 +15,10 @@ from application.rest.schemas.output.note_output import (
     NotesListResponse,
     PaginationInfo,
 )
+from application.rest.schemas.output.share_output import (
+    NoteSharesResponse,
+    ShareResponse,
+)
 from application.utils import convert_note_to_response
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from infrastructure.models.associations import note_tags
@@ -25,8 +29,6 @@ from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 from utils.dependencies import get_current_user_id, get_db
 from utils.keycloak import get_user_email_by_id, get_user_id_by_email
-
-from ..schemas.output.share_output import NoteSharesResponse, ShareResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

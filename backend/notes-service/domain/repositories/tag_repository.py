@@ -7,9 +7,8 @@ operations, following the Repository pattern from DDD.
 from abc import ABC, abstractmethod
 from typing import List
 
+from domain.entities.tag import TagEntity
 from sqlalchemy.orm import Session
-
-from ..entities.tag import TagEntity
 
 
 class TagRepository(ABC):

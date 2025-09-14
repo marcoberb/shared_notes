@@ -6,9 +6,8 @@ This module contains Pydantic models for search response output serialization.
 from datetime import datetime
 from typing import List
 
+from note_output import NoteResponse, NotesListResponse
 from pydantic import BaseModel
-
-from .note_output import NoteResponse, NotesListResponse
 
 
 class SearchResultResponse(BaseModel):

@@ -26,8 +26,7 @@ from infrastructure.repositories.sqlalchemy_tag_repository import (
 )
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-
-from .config import DATABASE_URL, LOG_LEVEL
+from utils.config import DATABASE_URL, LOG_LEVEL
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, LOG_LEVEL))

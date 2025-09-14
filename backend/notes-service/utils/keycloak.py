@@ -16,8 +16,7 @@ import logging
 from typing import Optional
 
 import httpx
-
-from .config import (
+from utils.config import (
     KEYCLOAK_ADMIN_CLIENT_ID,
     KEYCLOAK_ADMIN_PASSWORD,
     KEYCLOAK_ADMIN_USERNAME,
