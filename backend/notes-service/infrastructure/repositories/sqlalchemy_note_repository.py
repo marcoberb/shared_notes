@@ -36,7 +36,18 @@ class SQLAlchemyNoteRepository(NoteRepository):
     """
 
     async def create_note(self, db_session: Session, note: Note) -> Note:
-        """Create a new note in the repository."""
+        """Create a new note in the repository.
+
+        Args:
+            db_session (Session): SQLAlchemy database session for this operation
+            note (Note): Domain Note entity to create
+
+        Returns:
+            Note: Created note with assigned ID and timestamps
+
+        Raises:
+            RepositoryError: If creation fails at the data layer
+        """
         try:
             # Create ORM object from domain entity
             db_note = NoteORM(
@@ -69,7 +80,19 @@ class SQLAlchemyNoteRepository(NoteRepository):
     async def get_note_by_id(
         self, db_session: Session, note_id: UUID, user_id: UUID
     ) -> Optional[Note]:
-        """Get a note by ID if user has access to it."""
+        """Get a note by ID if user has access to it.
+        
+        Args:
+            db_session (Session): Database session.
+            note_id (UUID): The ID of the note to retrieve.
+            user_id (UUID): The ID of the user requesting the note.
+            
+        Returns:
+            Optional[Note]: The note if found and accessible, None otherwise.
+            
+        Raises:
+            RepositoryError: If there's an error retrieving the note.
+        """
         try:
             # User can access note if they own it OR it's shared with them
             note_orm = (
@@ -100,7 +123,19 @@ class SQLAlchemyNoteRepository(NoteRepository):
             raise
 
     async def update_note(self, db_session: Session, note: Note) -> Note:
-        """Update an existing note in the repository."""
+        """Update an existing note in the repository.
+        
+        Args:
+            db_session (Session): Database session.
+            note (Note): The note entity with updated data.
+            
+        Returns:
+            Note: The updated note entity.
+            
+        Raises:
+            ValueError: If the note is not found or not accessible.
+            RepositoryError: If there's an error updating the note.
+        """
         try:
             db_note = (
                 db_session.query(NoteORM)
@@ -142,7 +177,19 @@ class SQLAlchemyNoteRepository(NoteRepository):
     async def delete_note(
         self, db_session: Session, note_id: UUID, user_id: UUID
     ) -> bool:
-        """Soft delete a note (mark as deleted)."""
+        """Soft delete a note (mark as deleted).
+        
+        Args:
+            db_session (Session): Database session.
+            note_id (UUID): The ID of the note to delete.
+            user_id (UUID): The ID of the user who owns the note.
+            
+        Returns:
+            bool: True if the note was successfully deleted, False if not found.
+            
+        Raises:
+            RepositoryError: If there's an error deleting the note.
+        """
         try:
             db_note = (
                 db_session.query(NoteORM)
@@ -176,7 +223,21 @@ class SQLAlchemyNoteRepository(NoteRepository):
         limit: int,
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
-        """Get paginated list of all user's notes."""
+        """Get paginated list of all user's notes.
+        
+        Args:
+            db_session (Session): Database session.
+            user_id (UUID): The ID of the user whose notes to retrieve.
+            page (int): Page number (1-based).
+            limit (int): Number of notes per page.
+            tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
+            
+        Returns:
+            Tuple[List[Note], int]: A tuple containing the list of notes and total count.
+            
+        Raises:
+            RepositoryError: If there's an error retrieving the notes.
+        """
         try:
             offset = (page - 1) * limit
 
@@ -225,7 +286,21 @@ class SQLAlchemyNoteRepository(NoteRepository):
         limit: int,
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
-        """Get user's private notes (not shared with others)."""
+        """Get user's private notes (not shared with others).
+        
+        Args:
+            db_session (Session): Database session.
+            user_id (UUID): The ID of the user whose private notes to retrieve.
+            page (int): Page number (1-based).
+            limit (int): Number of notes per page.
+            tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
+            
+        Returns:
+            Tuple[List[Note], int]: A tuple containing the list of private notes and total count.
+            
+        Raises:
+            RepositoryError: If there's an error retrieving the notes.
+        """
         try:
             offset = (page - 1) * limit
 
@@ -283,7 +358,21 @@ class SQLAlchemyNoteRepository(NoteRepository):
         limit: int,
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
-        """Get notes owned by user that are shared with others."""
+        """Get notes owned by user that are shared with others.
+        
+        Args:
+            db_session (Session): Database session.
+            user_id (UUID): The ID of the user who owns the shared notes.
+            page (int): Page number (1-based).
+            limit (int): Number of notes per page.
+            tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
+            
+        Returns:
+            Tuple[List[Note], int]: A tuple containing the list of shared notes and total count.
+            
+        Raises:
+            RepositoryError: If there's an error retrieving the notes.
+        """
         try:
             offset = (page - 1) * limit
 
@@ -341,7 +430,21 @@ class SQLAlchemyNoteRepository(NoteRepository):
         limit: int,
         tag_ids: Optional[List[UUID]] = None,
     ) -> Tuple[List[Note], int]:
-        """Get notes shared with the user (not owned by them)."""
+        """Get notes shared with the user (not owned by them).
+        
+        Args:
+            db_session (Session): Database session.
+            user_id (UUID): The ID of the user with whom notes are shared.
+            page (int): Page number (1-based).
+            limit (int): Number of notes per page.
+            tag_ids (Optional[List[UUID]]): Optional list of tag IDs to filter by.
+            
+        Returns:
+            Tuple[List[Note], int]: A tuple containing the list of notes shared with the user and total count.
+            
+        Raises:
+            RepositoryError: If there's an error retrieving the notes.
+        """
         try:
             offset = (page - 1) * limit
 
@@ -397,7 +500,20 @@ class SQLAlchemyNoteRepository(NoteRepository):
         shared_by_user_id: UUID,
         shared_with_user_ids: List[UUID],
     ) -> bool:
-        """Share a note with multiple users."""
+        """Share a note with multiple users.
+        
+        Args:
+            db_session (Session): Database session.
+            note_id (UUID): The ID of the note to share.
+            shared_by_user_id (UUID): The ID of the user sharing the note.
+            shared_with_user_ids (List[UUID]): List of user IDs to share the note with.
+            
+        Returns:
+            bool: True if the note was successfully shared, False otherwise.
+            
+        Raises:
+            RepositoryError: If there's an error sharing the note.
+        """
         try:
             # Verify note exists and is owned by user
             note_exists = (

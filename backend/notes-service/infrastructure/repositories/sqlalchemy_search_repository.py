@@ -41,8 +41,8 @@ class SQLAlchemySearchRepository(SearchRepository):
         and converts ORM objects to domain entities.
 
         Args:
-            db_session: SQLAlchemy database session for this operation
-            criteria: The search criteria containing all search parameters
+            db_session (Session): SQLAlchemy database session for this operation.
+            criteria (SearchCriteria): The search criteria containing all search parameters.
 
         Returns:
             Tuple[List[Note], int]: A tuple containing:
@@ -50,7 +50,7 @@ class SQLAlchemySearchRepository(SearchRepository):
                 - Total count of notes matching the criteria
 
         Raises:
-            Exception: If search operation fails at the database layer
+            Exception: If search operation fails at the database level.
         """
         try:
             # Build base query based on section

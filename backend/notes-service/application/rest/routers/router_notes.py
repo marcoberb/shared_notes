@@ -74,8 +74,8 @@ async def get_notes(
         request (Request): FastAPI request object containing user headers.
         page (int, optional): Page number for pagination. Defaults to 1.
         limit (int, optional): Number of notes per page. Defaults to 10.
-        tag_ids (str, optional): Comma-separated tag UUIDs for filtering.
-        note_service: Note service dependency
+        tag_ids (Optional[str], optional): Comma-separated tag UUIDs for filtering. Defaults to None.
+        note_service (NoteService): Domain service for note operations.
         db (Session): Database session dependency injected by FastAPI.
 
     Returns:

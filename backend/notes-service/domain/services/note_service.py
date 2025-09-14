@@ -65,11 +65,11 @@ class NoteService:
         """Create a new note with business logic validation.
 
         Args:
-            db_session: Database session for this operation
-            title: Note title
-            content: Note content
-            owner_id: UUID of the note owner
-            tag_entities: List of tag entities to associate
+            db_session ("Session"): Database session for this operation
+            title (str): Note title
+            content (str): Note content
+            owner_id (UUID): UUID of the note owner
+            tag_entities (List[TagEntity]): List of tag entities to associate
 
         Returns:
             Note: Created note with assigned ID
@@ -108,9 +108,9 @@ class NoteService:
         """Get a note by ID with access control.
 
         Args:
-            db_session: Database session for this operation
-            note_id: UUID of the note to retrieve
-            user_id: UUID of the user requesting the note
+            db_session ("Session"): Database session for this operation
+            note_id (UUID): UUID of the note to retrieve
+            user_id (UUID): UUID of the user requesting the note
 
         Returns:
             Note: Retrieved note
@@ -148,12 +148,12 @@ class NoteService:
         """Update an existing note with business logic validation.
 
         Args:
-            db_session: Database session for this operation
-            note_id: UUID of the note to update
-            user_id: UUID of the user attempting the update
-            title: New title (optional)
-            content: New content (optional)
-            tag_entities: New tags (optional)
+            db_session ("Session"): Database session for this operation
+            note_id (UUID): UUID of the note to update
+            user_id (UUID): UUID of the user attempting the update
+            title (Optional[str], optional): New title. Defaults to None.
+            content (Optional[str], optional): New content. Defaults to None.
+            tag_entities (Optional[List[TagEntity]], optional): New tags. Defaults to None.
 
         Returns:
             Note: Updated note
@@ -208,9 +208,9 @@ class NoteService:
         """Delete a note with business logic validation.
 
         Args:
-            db_session: Database session for this operation
-            note_id: UUID of the note to delete
-            user_id: UUID of the user attempting deletion
+            db_session ("Session"): Database session for this operation
+            note_id (UUID): UUID of the note to delete
+            user_id (UUID): UUID of the user attempting deletion
 
         Returns:
             bool: True if deletion successful
@@ -262,14 +262,14 @@ class NoteService:
         """Get paginated list of all user's notes.
 
         Args:
-            db_session: Database session for this operation
-            user_id: UUID of the user
-            page: Page number (1-based)
-            limit: Number of notes per page
-            tag_ids: Optional list of tag UUIDs for filtering
+            db_session ("Session"): Database session for this operation
+            user_id (UUID): UUID of the user
+            page (int): Page number (1-based)
+            limit (int): Number of notes per page
+            tag_ids (Optional[List[UUID]], optional): Optional list of tag UUIDs for filtering. Defaults to None.
 
         Returns:
-            Tuple containing notes and pagination metadata
+            Tuple[List[Note], PaginationMetadata]: Tuple containing notes and pagination metadata
 
         Raises:
             ValueError: If pagination parameters are invalid
@@ -306,14 +306,14 @@ class NoteService:
         """Get paginated list of user's private notes.
 
         Args:
-            db_session: Database session for this operation
-            user_id: UUID of the user
-            page: Page number (1-based)
-            limit: Number of notes per page
-            tag_ids: Optional list of tag UUIDs for filtering
+            db_session ("Session"): Database session for this operation
+            user_id (UUID): UUID of the user
+            page (int): Page number (1-based)
+            limit (int): Number of notes per page
+            tag_ids (Optional[List[UUID]], optional): Optional list of tag UUIDs for filtering. Defaults to None.
 
         Returns:
-            Tuple containing private notes and pagination metadata
+            Tuple[List[Note], PaginationMetadata]: Tuple containing private notes and pagination metadata
 
         Raises:
             ValueError: If pagination parameters are invalid

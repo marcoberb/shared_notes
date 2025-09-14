@@ -29,8 +29,8 @@ class SearchRepository(ABC):
         """Search for notes based on the provided criteria.
 
         Args:
-            db_session: SQLAlchemy database session for this operation
-            criteria: The search criteria containing all search parameters
+            db_session (Session): SQLAlchemy database session for this operation.
+            criteria (SearchCriteria): The search criteria containing all search parameters.
 
         Returns:
             Tuple[List[Note], int]: A tuple containing:
@@ -38,6 +38,6 @@ class SearchRepository(ABC):
                 - Total count of notes matching the criteria (for pagination)
 
         Raises:
-            RepositoryError: If search operation fails at the data layer
+            RepositoryError: If search operation fails at the data layer.
         """
         pass

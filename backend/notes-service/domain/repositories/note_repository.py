@@ -28,8 +28,8 @@ class NoteRepository(ABC):
         """Create a new note in the repository.
 
         Args:
-            db_session: SQLAlchemy database session for this operation
-            note: Domain Note entity to create
+            db_session (Session): SQLAlchemy database session for this operation
+            note (Note): Domain Note entity to create
 
         Returns:
             Note: Created note with assigned ID and timestamps
@@ -46,9 +46,9 @@ class NoteRepository(ABC):
         """Get a note by ID if user has access to it.
 
         Args:
-            db_session: SQLAlchemy database session for this operation
-            note_id: UUID of the note to retrieve
-            user_id: UUID of the user requesting the note
+            db_session (Session): SQLAlchemy database session for this operation
+            note_id (UUID): UUID of the note to retrieve
+            user_id (UUID): UUID of the user requesting the note
 
         Returns:
             Optional[Note]: Note if found and accessible, None otherwise

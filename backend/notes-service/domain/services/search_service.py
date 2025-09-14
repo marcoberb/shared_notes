@@ -29,7 +29,7 @@ class SearchService:
         """Initialize the search service with dependencies.
 
         Args:
-            search_repository: Repository for performing search operations
+            search_repository (SearchRepository): Repository for performing search operations.
         """
         self._search_repository = search_repository
 
@@ -45,15 +45,15 @@ class SearchService:
         4. Creating and returning the search result
 
         Args:
-            db_session: SQLAlchemy database session for this operation
-            criteria: The search criteria containing all search parameters
+            db_session (Session): SQLAlchemy database session for this operation.
+            criteria (SearchCriteria): The search criteria containing all search parameters.
 
         Returns:
-            SearchResult: The search results with notes and pagination info
+            SearchResult: The search results with notes and pagination info.
 
         Raises:
-            ValueError: If search criteria are invalid
-            SearchError: If search operation fails
+            ValueError: If search criteria are invalid.
+            SearchError: If search operation fails.
         """
         logger.info(
             f"Performing search for user {criteria.user_id} with query '{criteria.query}' "
@@ -94,10 +94,10 @@ class SearchService:
         before proceeding with the search operation.
 
         Args:
-            criteria: The search criteria to validate
+            criteria (SearchCriteria): The search criteria to validate.
 
         Raises:
-            ValueError: If criteria are invalid according to business rules
+            ValueError: If criteria are invalid according to business rules.
         """
         # Validation is already handled in SearchCriteria.__post_init__
         # but we can add additional business rules here if needed
@@ -120,8 +120,8 @@ class SearchError(Exception):
         """Initialize search error.
 
         Args:
-            message: Human-readable error message
-            original_error: Original exception that caused this error
+            message (str): Human-readable error message.
+            original_error (Optional[Exception]): Original exception that caused this error.
         """
         super().__init__(message)
         self.original_error = original_error

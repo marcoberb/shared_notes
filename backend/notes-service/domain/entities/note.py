@@ -21,15 +21,15 @@ class Note:
     following Domain-Driven Design principles.
 
     Attributes:
-        id: Unique identifier for the note
-        title: Title of the note
-        content: Content/body of the note
-        owner_id: UUID of the user who owns the note
-        tags: List of tags associated with the note
-        created_at: Timestamp when the note was created
-        updated_at: Timestamp when the note was last updated
-        is_deleted: Whether the note is soft deleted
-        search_vector: Full-text search vector (handled by infrastructure)
+        id (UUID): Unique identifier for the note.
+        title (str): Title of the note.
+        content (str): Content/body of the note.
+        owner_id (UUID): UUID of the user who owns the note.
+        tags (List[TagEntity]): List of tags associated with the note.
+        created_at (datetime): Timestamp when the note was created.
+        updated_at (datetime): Timestamp when the note was last updated.
+        is_deleted (bool): Whether the note is soft deleted.
+        search_vector (Optional[str]): Full-text search vector (handled by infrastructure).
     """
 
     id: UUID
@@ -43,7 +43,11 @@ class Note:
     search_vector: Optional[str] = None  # Handled by infrastructure layer
 
     def __post_init__(self):
-        """Validate note after initialization."""
+        """Validate note after initialization.
+        
+        Raises:
+            ValueError: If note title or content are empty.
+        """
         if not self.title.strip():
             raise ValueError("Note title cannot be empty")
         if not self.content.strip():
@@ -60,16 +64,16 @@ class Note:
         """Factory method to create a new note with default values.
 
         Args:
-            title: Title of the note
-            content: Content of the note
-            owner_id: UUID of the note owner
-            tags: Optional list of tags
+            title (str): Title of the note.
+            content (str): Content of the note.
+            owner_id (UUID): UUID of the note owner.
+            tags (Optional[List[TagEntity]]): Optional list of tags.
 
         Returns:
-            Note: New note instance with generated UUID and timestamps
+            Note: New note instance with generated UUID and timestamps.
 
         Raises:
-            ValueError: If title or content are empty
+            ValueError: If title or content are empty.
         """
         from uuid import uuid4
 
@@ -92,16 +96,16 @@ class Note:
         """Factory method to create a note from API creation request.
 
         Args:
-            title: Note title from request
-            content: Note content from request
-            owner_id: UUID of the user creating the note
-            tag_entities: List of tag entities to associate
+            title (str): Note title from request.
+            content (str): Note content from request.
+            owner_id (UUID): UUID of the user creating the note.
+            tag_entities (List[TagEntity]): List of tag entities to associate.
 
         Returns:
-            Note: New note instance ready for persistence
+            Note: New note instance ready for persistence.
 
         Raises:
-            ValueError: If title or content are invalid
+            ValueError: If title or content are invalid.
         """
         return cls.create_new(
             title=title, content=content, owner_id=owner_id, tags=tag_entities
@@ -111,11 +115,11 @@ class Note:
         """Update the note's title and content.
 
         Args:
-            title: New title for the note
-            content: New content for the note
+            title (str): New title for the note.
+            content (str): New content for the note.
 
         Raises:
-            ValueError: If title or content are empty
+            ValueError: If title or content are empty.
         """
         if not title.strip():
             raise ValueError("Note title cannot be empty")
@@ -130,7 +134,7 @@ class Note:
         """Add a tag to the note if not already present.
 
         Args:
-            tag: The tag to add to the note
+            tag (TagEntity): The tag to add to the note.
         """
         if tag not in self.tags:
             self.tags.append(tag)
@@ -140,7 +144,7 @@ class Note:
         """Remove a tag from the note if present.
 
         Args:
-            tag: The tag to remove from the note
+            tag (TagEntity): The tag to remove from the note.
         """
         if tag in self.tags:
             self.tags.remove(tag)
@@ -160,10 +164,10 @@ class Note:
         """Check if the note is owned by the specified user.
 
         Args:
-            user_id: UUID of the user to check ownership for
+            user_id (UUID): UUID of the user to check ownership for.
 
         Returns:
-            bool: True if the user owns the note, False otherwise
+            bool: True if the user owns the note, False otherwise.
         """
         return self.owner_id == user_id
 
@@ -171,10 +175,10 @@ class Note:
         """Check if the note has a specific tag.
 
         Args:
-            tag_id: UUID of the tag to check for
+            tag_id (UUID): UUID of the tag to check for.
 
         Returns:
-            bool: True if the note has the tag, False otherwise
+            bool: True if the note has the tag, False otherwise.
         """
         return any(tag.id == tag_id for tag in self.tags)
 
@@ -182,10 +186,10 @@ class Note:
         """Check if the note has all the specified tags.
 
         Args:
-            tag_ids: List of tag UUIDs to check for
+            tag_ids (List[UUID]): List of tag UUIDs to check for.
 
         Returns:
-            bool: True if the note has all specified tags, False otherwise
+            bool: True if the note has all specified tags, False otherwise.
         """
         note_tag_ids = {tag.id for tag in self.tags}
         required_tag_ids = set(tag_ids)
@@ -199,10 +203,10 @@ class Note:
         is handled by the infrastructure layer.
 
         Args:
-            query: The search query string
+            query (str): The search query string.
 
         Returns:
-            bool: True if the note matches the query, False otherwise
+            bool: True if the note matches the query, False otherwise.
         """
         if not query.strip():
             return True
