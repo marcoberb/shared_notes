@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
-    owner_id VARCHAR(255) NOT NULL, -- Keycloak UUID
+    owner_id UUID NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted BOOLEAN DEFAULT FALSE,
@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS note_tags (
 CREATE TABLE IF NOT EXISTS note_shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-    shared_with_user_id VARCHAR(255) NOT NULL, -- Keycloak UUID
-    shared_by_user_id VARCHAR(255) NOT NULL,   -- Keycloak UUID
+    shared_with_user_id UUID NOT NULL,
+    shared_by_user_id UUID NOT NULL,
     permission VARCHAR(20) DEFAULT 'read',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(note_id, shared_with_user_id)
