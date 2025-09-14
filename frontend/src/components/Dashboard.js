@@ -621,27 +621,67 @@ const Dashboard = () => {
         )}
       </div>
 
-      {pagination.total_pages > 1 && (
-        <div className="pagination">
-          <button 
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={!pagination.has_previous}
-            className="pagination-btn"
-          >
-            ← Precedente
-          </button>
-          
-          {renderPaginationNumbers()}
-          
-          <button 
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={!pagination.has_next}
-            className="pagination-btn"
-          >
-            Successiva →
-          </button>
-        </div>
-      )}
+      <div className="pagination-footer" style={{ 
+        marginTop: '20px', 
+        padding: '15px 0', 
+        borderTop: '1px solid #e9ecef',
+        textAlign: 'center',
+        color: '#666',
+        fontSize: '14px'
+      }}>
+        {loading ? (
+          <span>Caricamento...</span>
+        ) : (
+          <div>
+            <div style={{ marginBottom: '15px', fontWeight: '500' }}>
+              Pagina {pagination.current_page} di {pagination.total_pages} ({pagination.total_notes} note totali)
+            </div>
+            
+            <div className="pagination" style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              gap: '8px' 
+            }}>
+              <button 
+                onClick={() => handlePageChange(1)}
+                disabled={pagination.current_page === 1}
+                className="pagination-btn"
+                title="Prima pagina"
+              >
+                ⏮ Prima
+              </button>
+              
+              <button 
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={!pagination.has_previous}
+                className="pagination-btn"
+              >
+                ← Precedente
+              </button>
+              
+              {renderPaginationNumbers()}
+              
+              <button 
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={!pagination.has_next}
+                className="pagination-btn"
+              >
+                Successiva →
+              </button>
+              
+              <button 
+                onClick={() => handlePageChange(pagination.total_pages)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="pagination-btn"
+                title="Ultima pagina"
+              >
+                Ultima ⏭
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {showModal && selectedNote && (
         <div className="modal-overlay" onClick={handleCloseModal}>
