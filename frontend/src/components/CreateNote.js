@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import TagSelector from './TagSelector';
 import { useNavigate, Link } from 'react-router-dom';
 import { notesService } from '../services/notesService';
+import { renderMultilineTextWithLinks } from '../utils/linkUtils';
+import LinkifiedTextarea from './LinkifiedTextarea';
 
 const CreateNote = () => {
   const navigate = useNavigate();
@@ -9,9 +11,9 @@ const CreateNote = () => {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedTags, setSelectedTags] = useState([]); // Array of tag IDs
-  const [shareEmails, setShareEmails] = useState([]); // Array of email addresses
-  const [emailInput, setEmailInput] = useState(''); // Current email being typed
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [shareEmails, setShareEmails] = useState([]);
+  const [emailInput, setEmailInput] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,18 +31,14 @@ const CreateNote = () => {
       const noteData = {
         title: title.trim(),
         content: content.trim(),
-        tags: selectedTags.map(id => parseInt(id, 10)), // send as array of IDs
-        share_emails: shareEmails // include emails for sharing
+        tags: selectedTags.map(id => parseInt(id, 10)),
+        share_emails: shareEmails
       };
 
       const response = await notesService.createNote(noteData);
       
-      // Reindirizza alla dashboard
       navigate('/');
-    } catch (error) {
-      console.error('Error creating note:', error);
-      
-      // Extract more specific error message if available
+    } catch (error) {      
       let errorMessage = 'Errore nella creazione della nota';
       if (error.response?.data?.detail) {
         errorMessage = error.response.data.detail;
@@ -54,7 +52,6 @@ const CreateNote = () => {
     }
   };
 
-  // Email management functions
   const addEmail = () => {
     const email = emailInput.trim().toLowerCase();
     if (email && isValidEmail(email) && !shareEmails.includes(email)) {
@@ -122,14 +119,13 @@ const CreateNote = () => {
 
         <div className="form-group">
           <label htmlFor="content">Contenuto *</label>
-          <textarea
-            id="content"
+          <LinkifiedTextarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Scrivi qui il contenuto della tua nota..."
-            className="form-textarea form-textarea-wide"
+            placeholder="Scrivi qui il contenuto della tua nota...&#10;&#10;💡 Suggerimento: Gli URL (http://, https://, www.) verranno automaticamente convertiti in link cliccabili!"
             disabled={loading}
-            rows="10"
+            rows={10}
+            style={{ width: '100%' }}
           />
         </div>
 
@@ -139,7 +135,6 @@ const CreateNote = () => {
           disabled={loading}
         />
 
-        {/* Email sharing section */}
         <div className="form-group">
           <label htmlFor="share-emails">Condividi con (email)</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
@@ -165,7 +160,6 @@ const CreateNote = () => {
             </button>
           </div>
           
-          {/* Display added emails */}
           {shareEmails.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
               {shareEmails.map((email, index) => (

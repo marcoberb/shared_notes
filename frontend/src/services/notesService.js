@@ -52,7 +52,6 @@ export const getTags = async () => {
   return response.data;
 };
 
-// Export as default object for easier importing
 const notesService = {
   getMyNotes,
   getNotesSharedByMe,

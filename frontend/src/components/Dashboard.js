@@ -6,10 +6,12 @@ import { shareService } from '../services/shareService';
 import tagsService from '../services/tagsService';
 import { useAuth } from '../utils/AuthContext';
 import TagSelector from './TagSelector';
+import { renderMultilineTextWithLinks } from '../utils/linkUtils';
+import LinkifiedTextarea from './LinkifiedTextarea';
 
 const Dashboard = () => {
   const [notes, setNotes] = useState([]);
-  const [activeSection, setActiveSection] = useState('my-notes'); // 'my-notes', 'shared-by-me', 'shared-with-me'
+  const [activeSection, setActiveSection] = useState('my-notes');
   const [sectionCounts, setSectionCounts] = useState({
     'my-notes': 0,
     'shared-by-me': 0,
@@ -32,31 +34,29 @@ const Dashboard = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [editedContent, setEditedContent] = useState('');
-  const [selectedTags, setSelectedTags] = useState([]); // Array of tag IDs (string)
+  const [selectedTags, setSelectedTags] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // Tag filtering state
-  const [allTags, setAllTags] = useState([]); // All available tags from DB
-  const [selectedFilterTags, setSelectedFilterTags] = useState([]); // Tags selected for filtering (array of tag IDs)
+  const [allTags, setAllTags] = useState([]);
+  const [selectedFilterTags, setSelectedFilterTags] = useState([]);
   
-  // Share management state
-  const [noteShares, setNoteShares] = useState([]); // Current note's shares
-  const [emailInput, setEmailInput] = useState(''); // Email input for sharing
-  const [modalError, setModalError] = useState(null); // Error state specific to modal
+  const [noteShares, setNoteShares] = useState([]);
+  const [emailInput, setEmailInput] = useState('');
+  const [modalError, setModalError] = useState(null);
   const { user, logout } = useAuth();
 
-  // Load all available tags on component mount
+  
   const loadAllTags = async () => {
     try {
       const tagsData = await tagsService.getAllTags();
       setAllTags(tagsData);
     } catch (error) {
-      console.error('Error loading tags:', error);
+      
     }
   };
 
-  // Carica i conteggi per tutte le sezioni
+  
   const loadAllSectionCounts = async () => {
     try {
       const sections = ['my-notes', 'shared-by-me', 'shared-with-me'];
@@ -80,19 +80,19 @@ const Dashboard = () => {
       
       setSectionCounts(counts);
     } catch (error) {
-      console.error('Error loading section counts:', error);
+      
     }
   };
 
   useEffect(() => {
-    loadAllSectionCounts(); // Carica i conteggi all'inizio
-    loadAllTags(); // Load available tags
+    loadAllSectionCounts(); 
+    loadAllTags(); 
     loadNotes(currentPage, activeSection);
   }, [currentPage, activeSection]);
 
-  // Effect to reload notes when tag filters change
+  
   useEffect(() => {
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1); 
     loadNotes(1, activeSection);
   }, [selectedFilterTags]);
 
@@ -101,7 +101,7 @@ const Dashboard = () => {
       setLoading(true);
       let response;
       
-      // Create tags parameter if filters are selected
+      
       const tagsParam = selectedFilterTags.length > 0 ? selectedFilterTags.join(',') : null;
       
       switch (section) {
@@ -118,7 +118,6 @@ const Dashboard = () => {
           response = await notesService.getMyNotes(page, tagsParam);
       }
       
-      console.log('Notes response:', response); // Debug log
       setNotes(response.notes || []);
       
       const paginationData = response.pagination || {
@@ -132,21 +131,20 @@ const Dashboard = () => {
       
       setPagination(paginationData);
       
-      // Aggiorna il conteggio per la sezione specifica
+      
       setSectionCounts(prev => ({
         ...prev,
         [section]: paginationData.total_notes
       }));
     } catch (error) {
       setError('Errore nel caricamento delle note');
-      console.error('Error loading notes:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async (page = 1) => {
-    // Se viene chiamato da un event (form submit), gestisci l'evento
+    
     if (page && page.preventDefault) {
       page.preventDefault();
       page = 1;
@@ -160,9 +158,8 @@ const Dashboard = () => {
 
     try {
       setLoading(true);
-      // Include selected filter tags in search
+      
       const response = await searchService.searchNotes(searchQuery, selectedFilterTags, page);
-      console.log('Search response:', response); // Debug log
       setNotes(response.notes || []);
       setPagination(response.pagination || {
         current_page: 1,
@@ -174,7 +171,6 @@ const Dashboard = () => {
       });
     } catch (error) {
       setError('Errore nella ricerca');
-      console.error('Error searching notes:', error);
     } finally {
       setLoading(false);
     }
@@ -183,35 +179,34 @@ const Dashboard = () => {
   const handleSectionChange = (section) => {
     setActiveSection(section);
     setCurrentPage(1);
-    setSearchQuery(''); // Clear search when changing sections
-    setSelectedFilterTags([]); // Clear tag filters when changing sections
+    setSearchQuery(''); 
+    setSelectedFilterTags([]); 
   };
 
-  // Handle tag filter selection
+  
   const handleTagFilterToggle = (tagId) => {
     setSelectedFilterTags(prev => {
       if (prev.includes(tagId)) {
-        // Remove tag if already selected
+        
         return prev.filter(id => id !== tagId);
       } else {
-        // Add tag if not selected
+        
         return [...prev, tagId];
       }
     });
   };
 
-  // Clear all tag filters
+  
   const clearTagFilters = () => {
     setSelectedFilterTags([]);
   };
 
-  // Share management functions
+  
   const loadNoteShares = async (noteId) => {
     try {
       const response = await shareService.getNoteShares(noteId);
       setNoteShares(response.shares || []);
     } catch (error) {
-      console.error('Error loading note shares:', error);
       setNoteShares([]);
     }
   };
@@ -220,14 +215,12 @@ const Dashboard = () => {
     const email = emailInput.trim().toLowerCase();
     if (email && isValidEmail(email) && selectedNote) {
       try {
-        setModalError(null); // Clear any previous errors
+        setModalError(null); 
         await shareService.shareNote(selectedNote.id, [email]);
         setEmailInput('');
-        await loadNoteShares(selectedNote.id); // Reload shares
-      } catch (error) {
-        console.error('Error sharing note:', error);
+        await loadNoteShares(selectedNote.id); 
+      } catch (error) {        
         
-        // Extract more specific error message if available
         let errorMessage = 'Errore nella condivisione della nota';
         if (error.response?.data?.detail) {
           errorMessage = error.response.data.detail;
@@ -243,13 +236,11 @@ const Dashboard = () => {
   const removeEmailShare = async (email) => {
     if (selectedNote) {
       try {
-        setModalError(null); // Clear any previous errors
+        setModalError(null); 
         await shareService.removeShareByEmail(selectedNote.id, email);
-        await loadNoteShares(selectedNote.id); // Reload shares
-      } catch (error) {
-        console.error('Error removing share:', error);
+        await loadNoteShares(selectedNote.id); 
+      } catch (error) {        
         
-        // Extract more specific error message if available
         let errorMessage = 'Errore nella rimozione della condivisione';
         if (error.response?.data?.detail) {
           errorMessage = error.response.data.detail;
@@ -280,11 +271,10 @@ const Dashboard = () => {
 
     try {
       await notesService.deleteNote(noteId);
-      // Ricarica la pagina corrente per aggiornare la paginazione
+      
       loadNotes(currentPage, activeSection);
     } catch (error) {
       setError('Errore nell\'eliminazione della nota');
-      console.error('Error deleting note:', error);
     }
   };
 
@@ -293,7 +283,7 @@ const Dashboard = () => {
     setEditedTitle(note.title);
     setEditedContent(note.content);
     
-    // Set selected tags
+    
     if (note.tags) {
       const tagIds = note.tags.length && typeof note.tags[0] === 'object'
         ? note.tags.map(t => t.id.toString())
@@ -303,13 +293,13 @@ const Dashboard = () => {
       setSelectedTags([]);
     }
     
-    // Load note shares
+    
     await loadNoteShares(note.id);
     
     setIsEditing(false);
     setHasChanges(false);
-    setEmailInput(''); // Clear email input
-    setModalError(null); // Clear modal errors
+    setEmailInput(''); 
+    setModalError(null); 
     setShowModal(true);
   };
 
@@ -332,7 +322,7 @@ const Dashboard = () => {
     setSelectedTags([]);
     setHasChanges(false);
     setSaving(false);
-    setModalError(null); // Clear modal errors
+    setModalError(null); 
   };
 
   const handleEditNote = () => {
@@ -386,18 +376,17 @@ const Dashboard = () => {
         tags: selectedTags.map(id => parseInt(id, 10))
       });
       
-      // Aggiorna la lista delle note
+      
       setNotes(notes.map(note => 
         note.id === selectedNote.id ? updatedNote : note
       ));
       
-      // Aggiorna la nota selezionata
+      
       setSelectedNote(updatedNote);
       setIsEditing(false);
       setHasChanges(false);
     } catch (error) {
       setError('Errore nel salvataggio della nota');
-      console.error('Error saving note:', error);
     } finally {
       setSaving(false);
     }
@@ -408,7 +397,7 @@ const Dashboard = () => {
       if (window.confirm('Ci sono modifiche non salvate. Sei sicuro di voler annullare?')) {
         setEditedTitle(selectedNote.title);
         setEditedContent(selectedNote.content);
-        // Reset selected tags
+        
         if (selectedNote.tags) {
           const tagIds = selectedNote.tags.length && typeof selectedNote.tags[0] === 'object'
             ? selectedNote.tags.map(t => t.id.toString())
@@ -428,7 +417,7 @@ const Dashboard = () => {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.total_pages) {
       setCurrentPage(newPage);
-      // Se siamo in modalità ricerca, ricarica i risultati di ricerca per la nuova pagina
+      
       if (searchQuery) {
         handleSearch(newPage);
       }
@@ -441,7 +430,7 @@ const Dashboard = () => {
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(pagination.total_pages, startPage + maxVisiblePages - 1);
     
-    // Adjust start page if we're near the end
+    
     if (endPage - startPage + 1 < maxVisiblePages) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
@@ -488,104 +477,6 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Section Tabs */}
-      <div className="section-tabs" style={{ marginTop: '20px', borderBottom: '1px solid #e0e0e0' }}>
-        <div style={{ display: 'flex', gap: '0' }}>
-          <button
-            onClick={() => handleSectionChange('my-notes')}
-            className={`tab-button ${activeSection === 'my-notes' ? 'active' : ''}`}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              background: activeSection === 'my-notes' ? '#007bff' : 'transparent',
-              color: activeSection === 'my-notes' ? 'white' : '#666',
-              borderRadius: '8px 8px 0 0',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeSection === 'my-notes' ? 'bold' : 'normal',
-              borderBottom: activeSection === 'my-notes' ? '2px solid #007bff' : '2px solid transparent'
-            }}
-          >
-            Le Mie Note ({sectionCounts['my-notes'] || 0})
-          </button>
-          <button
-            onClick={() => handleSectionChange('shared-by-me')}
-            className={`tab-button ${activeSection === 'shared-by-me' ? 'active' : ''}`}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              background: activeSection === 'shared-by-me' ? '#007bff' : 'transparent',
-              color: activeSection === 'shared-by-me' ? 'white' : '#666',
-              borderRadius: '8px 8px 0 0',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeSection === 'shared-by-me' ? 'bold' : 'normal',
-              borderBottom: activeSection === 'shared-by-me' ? '2px solid #007bff' : '2px solid transparent'
-            }}
-          >
-            Condivise da Me ({sectionCounts['shared-by-me'] || 0})
-          </button>
-          <button
-            onClick={() => handleSectionChange('shared-with-me')}
-            className={`tab-button ${activeSection === 'shared-with-me' ? 'active' : ''}`}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              background: activeSection === 'shared-with-me' ? '#007bff' : 'transparent',
-              color: activeSection === 'shared-with-me' ? 'white' : '#666',
-              borderRadius: '8px 8px 0 0',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeSection === 'shared-with-me' ? 'bold' : 'normal',
-              borderBottom: activeSection === 'shared-with-me' ? '2px solid #007bff' : '2px solid transparent'
-            }}
-          >
-            Condivise con Me ({sectionCounts['shared-with-me'] || 0})
-          </button>
-        </div>
-      </div>
-
-      <div className="search-section" style={{ marginTop: '30px' }}>
-        <form onSubmit={handleSearch} className="search-form" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <input
-            type="text"
-            placeholder="Cerca nelle tue note..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="search-input"
-            style={{ 
-              height: '36px', 
-              padding: '6px 12px',
-              flex: '1',
-              maxWidth: '400px',
-              fontSize: '14px'
-            }}
-          />
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            style={{ height: '36px', padding: '6px 16px', fontSize: '14px' }}
-          >
-            Cerca
-          </button>
-          {searchQuery && (
-            <button 
-              type="button" 
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedFilterTags([]); // Clear tag filters when resetting search
-                setCurrentPage(1);
-                loadNotes(1, activeSection);
-              }}
-              className="btn btn-secondary"
-              style={{ height: '36px', padding: '6px 16px', fontSize: '14px' }}
-            >
-              Reset
-            </button>
-          )}
-        </form>
-
-        {/* Tag Filtering Interface */}
         {allTags.length > 0 && (
           <div className="tag-filters" style={{ marginTop: '15px' }}>
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -683,7 +574,20 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="note-content">
-                <p>{note.content.substring(0, 150)}...</p>
+                <p style={{ 
+                  lineHeight: 1.5,
+                  wordBreak: 'break-word',
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical'
+                }}>
+                  {renderMultilineTextWithLinks(
+                    note.content.length > 150 
+                      ? note.content.substring(0, 150) + '...' 
+                      : note.content
+                  )}
+                </p>
               </div>
               {note.is_shared && (
                 <div className="note-meta">
@@ -695,52 +599,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Pagination Controls */}
-      {pagination.total_notes > 0 && (
-        <div className="pagination-container">
-          <div className="pagination-info">
-            <span>
-              Pagina {pagination.current_page} di {pagination.total_pages} 
-              ({pagination.total_notes} note totali)
-            </span>
-          </div>
-          <div className="pagination-controls">
-            <button
-              onClick={() => handlePageChange(1)}
-              disabled={!pagination.has_previous}
-              className="pagination-btn"
-            >
-              «
-            </button>
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={!pagination.has_previous}
-              className="pagination-btn"
-            >
-              ‹
-            </button>
-            
-            {renderPaginationNumbers()}
-            
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={!pagination.has_next}
-              className="pagination-btn"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => handlePageChange(pagination.total_pages)}
-              disabled={!pagination.has_next}
-              className="pagination-btn"
-            >
-              »
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal per visualizzare/modificare la nota completa */}
       {showModal && selectedNote && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -799,13 +657,14 @@ const Dashboard = () => {
               <div className="note-content-full">
                 {isEditing ? (
                   <>
-                    <textarea
+                    <LinkifiedTextarea
                       value={editedContent}
                       onChange={handleContentChange}
-                      className="modal-content-textarea"
-                      placeholder="Contenuto della nota"
+                      placeholder="Contenuto della nota...&#10;&#10;💡 URL (http:
                       rows={15}
+                      style={{ width: '100%', marginBottom: '20px' }}
                     />
+                    
                     <div style={{ marginTop: '20px', marginBottom: '20px' }}>
                       <TagSelector
                         selectedTags={selectedTags}
@@ -814,11 +673,6 @@ const Dashboard = () => {
                       />
                     </div>
 
-                    {/* Share management section */}
-                    <div style={{ marginTop: '20px', marginBottom: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-                      <h4 style={{ marginBottom: '15px', fontSize: '16px', fontWeight: '600' }}>Condivisioni</h4>
-                      
-                      {/* Modal error display */}
                       {modalError && (
                         <div style={{
                           backgroundColor: '#f8d7da',
@@ -833,52 +687,6 @@ const Dashboard = () => {
                         </div>
                       )}
                       
-                      {/* Current shares */}
-                      {noteShares.length > 0 && (
-                        <div style={{ marginBottom: '15px' }}>
-                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                            Condiviso con:
-                          </label>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {noteShares.map((share, index) => (
-                              <span 
-                                key={share.id || index}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  padding: '6px 10px',
-                                  backgroundColor: '#f0f7ff',
-                                  border: '1px solid #b3d9ff',
-                                  borderRadius: '14px',
-                                  fontSize: '13px',
-                                  gap: '8px'
-                                }}
-                              >
-                                {share.shared_with_email}
-                                <button
-                                  type="button"
-                                  onClick={() => removeEmailShare(share.shared_with_email)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#0066cc',
-                                    cursor: 'pointer',
-                                    fontSize: '16px',
-                                    lineHeight: '1',
-                                    padding: '0',
-                                    marginLeft: '4px'
-                                  }}
-                                  title="Rimuovi condivisione"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Add new share */}
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           Condividi con nuova email:
@@ -889,7 +697,7 @@ const Dashboard = () => {
                             value={emailInput}
                             onChange={(e) => {
                               setEmailInput(e.target.value);
-                              // Clear modal error when user starts typing
+                              
                               if (modalError) {
                                 setModalError(null);
                               }
@@ -927,9 +735,14 @@ const Dashboard = () => {
                     </div>
                   </>
                 ) : (
-                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                    {selectedNote.content}
-                  </pre>
+                  <div style={{ 
+                    whiteSpace: 'pre-wrap', 
+                    fontFamily: 'inherit',
+                    lineHeight: 1.6,
+                    wordBreak: 'break-word'
+                  }}>
+                    {renderMultilineTextWithLinks(selectedNote.content)}
+                  </div>
                 )}
               </div>
               

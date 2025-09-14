@@ -25,7 +25,6 @@ function TagSelector({ selectedTags, setSelectedTags, disabled }) {
     fetchTags();
   }, []);
 
-  // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {

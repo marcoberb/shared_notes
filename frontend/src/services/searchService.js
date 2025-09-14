@@ -25,7 +25,6 @@ export const getPopularTags = async (limit = 20) => {
   return response.data;
 };
 
-// Export as default object for easier importing
 const searchService = {
   searchNotes,
   getSharedNotes,

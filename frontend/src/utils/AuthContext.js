@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
       });
       return { success: true };
     } catch (error) {
-      console.error('Login error:', error);
       return { 
         success: false, 
         error: 'Login failed' 
@@ -37,7 +36,6 @@ export const AuthProvider = ({ children }) => {
       });
       return { success: true };
     } catch (error) {
-      console.error('Registration error:', error);
       return { 
         success: false, 
         error: 'Registration failed' 
@@ -51,7 +49,6 @@ export const AuthProvider = ({ children }) => {
         redirectUri: window.location.origin
       });
     } catch (error) {
-      console.error('Logout error:', error);
     }
   };
 
@@ -87,7 +84,7 @@ export const AuthProvider = ({ children }) => {
     loading: !initialized,
     isAuthenticated: isAuthenticated(),
     getToken,
-    keycloak // Expose keycloak instance for advanced usage
+    keycloak
   };
 
   return (

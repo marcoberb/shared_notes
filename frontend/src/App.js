@@ -8,7 +8,6 @@ import Dashboard from './components/Dashboard';
 import CreateNote from './components/CreateNote';
 import './index.css';
 
-// Protected Route component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   
@@ -19,7 +18,6 @@ const ProtectedRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
-// Public Route component (redirect to dashboard if logged in)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   
@@ -73,15 +71,10 @@ function App() {
     pkceMethod: 'S256'
   };
 
-  const handleKeycloakEvent = (event, error) => {
-    console.log('Keycloak event:', event, error);
-  };
-
   return (
     <ReactKeycloakProvider
       authClient={keycloak}
       initOptions={keycloakProviderInitOptions}
-      onEvent={handleKeycloakEvent}
       LoadingComponent={<div>Loading authentication...</div>}
     >
       <AuthProvider>

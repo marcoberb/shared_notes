@@ -23,7 +23,6 @@ export const removeShareByEmail = async (noteId, email) => {
   return response.data;
 };
 
-// Legacy methods for backward compatibility
 export const revokeShare = async (shareId) => {
   const response = await api.delete(`/share/${shareId}`);
   return response.data;
@@ -39,15 +38,14 @@ export const getSharedByMe = async () => {
   return response.data;
 };
 
-// Export as default object for easier importing
 const shareService = {
   shareNote,
   getNoteShares,
   removeShareById,
   removeShareByEmail,
-  revokeShare,  // legacy
-  getSharedWithMe,  // legacy
-  getSharedByMe     // legacy
+  revokeShare,
+  getSharedWithMe,
+  getSharedByMe
 };
 
 export default shareService;

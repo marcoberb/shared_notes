@@ -64,7 +64,6 @@ code {
   font-weight: bold;
 }
 
-/* Create Note Styles */
 .create-note {
   width: 90% !important;
   margin: 0 auto !important;
@@ -157,7 +156,6 @@ code {
   font-size: 14px;
 }
 
-/* Dashboard Styles */
 .dashboard {
   width: 90% !important;
   margin: 0 auto !important;
@@ -268,7 +266,6 @@ code {
   font-size: 16px;
 }
 
-/* Pagination Styles */
 .pagination-container {
   display: flex;
   flex-direction: column;
@@ -346,7 +343,6 @@ code {
   color: #666;
 }
 
-/* Modal Styles */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -456,7 +452,6 @@ code {
   font-size: 14px;
 }
 
-/* Note editor styles */
 .note-editor {
   display: flex;
   flex-direction: column;
@@ -558,7 +553,6 @@ code {
   cursor: not-allowed;
 }
 
-/* Missing Styles - Used but not defined */
 .App {
   text-align: center;
   min-height: 100vh;
@@ -704,7 +698,6 @@ code {
   margin-top: 15px;
 }
 
-/* Dropdown styles for TagSelector */
 .dropdown-placeholder {
   padding: 10px 12px;
   border: 1px solid #ddd;
@@ -743,6 +736,36 @@ code {
   overflow-y: auto;
   z-index: 1000;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: #999;
+  font-style: italic;
+  pointer-events: none;
+}
+
+[contenteditable]:focus:before {
+  content: none;
+}
+
+[contenteditable] a {
+  color: #007bff !important;
+  text-decoration: underline !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  font-weight: normal !important;
+}
+
+[contenteditable] a:hover {
+  color: #0056b3 !important;
+  background-color: rgba(0, 123, 255, 0.1) !important;
+  text-decoration: underline !important;
+}
+
+[contenteditable] a:focus {
+  outline: 2px solid #007bff !important;
+  outline-offset: 1px !important;
 }
 
 @media (max-width: 768px) {
