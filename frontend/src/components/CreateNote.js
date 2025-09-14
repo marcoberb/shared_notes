@@ -31,7 +31,7 @@ const CreateNote = () => {
       const noteData = {
         title: title.trim(),
         content: content.trim(),
-        tags: selectedTags.map(id => parseInt(id, 10)),
+        tags: selectedTags, // UUID strings, no conversion needed
         share_emails: shareEmails
       };
 

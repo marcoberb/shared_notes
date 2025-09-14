@@ -1,10 +1,11 @@
 import api from './api';
 
-export const searchNotes = async (query, tags = [], page = 1) => {
+export const searchNotes = async (query, tags = [], page = 1, section = 'my-notes') => {
   const params = new URLSearchParams();
   if (query) params.append('q', query);
   if (tags.length > 0) params.append('tags', tags.join(','));
   params.append('page', page);
+  params.append('section', section);
 
   const response = await api.get(`/search?${params}`);
   return response.data;

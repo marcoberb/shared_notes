@@ -153,7 +153,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       
-      const response = await searchService.searchNotes(searchQuery, selectedFilterTags, page);
+      const response = await searchService.searchNotes(searchQuery, selectedFilterTags, page, activeSection);
       setNotes(response.notes || []);
       setPagination(response.pagination || {
         current_page: 1,
@@ -208,6 +208,9 @@ const Dashboard = () => {
         await shareService.shareNote(selectedNote.id, [email]);
         setEmailInput('');
         await loadNoteShares(selectedNote.id);
+        // Ricarica le note per aggiornare i conteggi delle sezioni
+        // dato che la nota potrebbe spostarsi da "Note private" a "Condivise da me"
+        loadNotes(currentPage, activeSection);
       } catch (error) {
         let errorMessage = 'Errore nella condivisione della nota';
         if (error.response?.data?.detail) {
@@ -227,6 +230,9 @@ const Dashboard = () => {
         setModalError(null);
         await shareService.removeShareByEmail(selectedNote.id, email);
         await loadNoteShares(selectedNote.id);
+        // Ricarica le note per aggiornare i conteggi delle sezioni
+        // dato che la nota potrebbe spostarsi da "Condivise da me" a "Note private"
+        loadNotes(currentPage, activeSection);
       } catch (error) {
         let errorMessage = 'Errore nella rimozione della condivisione';
         if (error.response?.data?.detail) {
@@ -357,7 +363,7 @@ const Dashboard = () => {
       const updatedNote = await notesService.updateNote(selectedNote.id, {
         title: editedTitle,
         content: editedContent,
-        tags: selectedTags.map(id => parseInt(id, 10))
+        tags: selectedTags // UUID strings, no conversion needed
       });
       
       setNotes(notes.map(note => 
@@ -463,7 +469,7 @@ const Dashboard = () => {
           className={`btn ${activeSection === 'my-notes' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => handleSectionChange('my-notes')}
         >
-          Le mie note ({sectionCounts['my-notes']})
+          Note private ({sectionCounts['my-notes']})
         </button>
         <button 
           className={`btn ${activeSection === 'shared-by-me' ? 'btn-primary' : 'btn-secondary'}`}
