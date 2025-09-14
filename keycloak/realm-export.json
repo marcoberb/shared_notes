@@ -6,7 +6,7 @@
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,
   "rememberMe": true,
-  "verifyEmail": true,
+  "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
@@ -55,10 +55,15 @@
         "offline_access"
       ],
       "redirectUris": [
-        "http://localhost:3000/*"
+        "http://localhost:3000",
+        "http://localhost:3000/*",
+        "https://localhost:3443",
+        "https://localhost:3443/",
+        "https://localhost:3443/*"
       ],
       "webOrigins": [
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://localhost:3443"
       ]
     },
     {
