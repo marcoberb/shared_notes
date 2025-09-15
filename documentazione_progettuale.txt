@@ -1,0 +1,261 @@
+SharedNotes - documento progettuale
+
+
+INDICE:
+INTRODUZIONE E OVERVIEW DEL PROGETTO
+ARCHITETTURA SISTEMA
+MODELLO DATI E DATABASE
+IMPLEMENTAZIONE BACKEND
+IMPLEMENTAZIONE FRONTEND
+SICUREZZA E AUTENTICAZIONE
+DEPLOYMENT E CONTAINERIZZAZIONE
+PIPELINE CI/CD E DEVOPS
+1. INTRODUZIONE E OVERVIEW DEL PROGETTO
+SharedNotes rappresenta una soluzione moderna per la gestione collaborativa di note, pensata per scalare efficacemente con l'aumento della base utenti. Il sistema nasce dall'esigenza di fornire uno strumento intuitivo che permetta non solo di creare e organizzare contenuti personali, ma anche di facilitare la condivisione e la collaborazione tra utenti in modo sicuro e performante.
+
+Il cuore del progetto risiede nella sua architettura a microservizi, che garantisce flessibilità e scalabilità, permettendo di evolvere singoli componenti senza impattare l'intero sistema. Ogni microservizio è stato progettato seguendo principi consolidati dell'ingegneria del software, con particolare attenzione alla separazione delle responsabilità e alla testabilità del codice.
+OBIETTIVI PRINCIPALI:
+Il sistema mira a fornire un'esperienza utente fluida attraverso diverse funzionalità chiave:
+- Gestione sicura di note personali e condivise con controllo granulare dei permessi
+- Sistema di ricerca full-text performante anche su grandi volumi di dati
+- Organizzazione intelligente tramite un sistema di tag flessibile e intuitivo
+- Architettura modulare che facilita manutenzione e estensioni future
+- Interfaccia web moderna e responsive, ottimizzata per diversi dispositivi
+- Pipeline di deployment automatizzata per rilasci frequenti e affidabili
+STACK TECNOLOGICO:
+La scelta delle tecnologie è stata guidata da criteri di maturità, performance e facilità di manutenzione:
+- Backend: Python 3.11 con FastAPI per API REST moderne e performanti
+- Frontend: React.js 18 per un'interfaccia utente reattiva e modulare
+- Database: PostgreSQL 15 per persistenza affidabile con ricerca full-text integrata
+- Autenticazione: Keycloak 22.0 per gestione utenti enterprise-grade con OAuth2/OpenID Connect
+- Containerizzazione: Docker e Docker Compose per deployment consistenti
+- API Gateway: FastAPI centralizzato per routing, autenticazione e monitoraggio
+2. ARCHITETTURA SISTEMA
+2.1 VISIONE ARCHITETTURALE
+
+L'architettura di SharedNotes riflette un approccio moderno basato su microservizi, dove ogni componente ha responsabilità specifiche e ben definite. Questa scelta progettuale permette di scalare indipendentemente i diversi servizi in base al carico e di utilizzare le tecnologie più appropriate per ogni dominio specifico.
+
+Al centro dell'architettura troviamo un API Gateway che funge da punto di ingresso unico per tutte le richieste client, gestendo autenticazione, routing e aspetti trasversali. Questo pattern semplifica notevolmente la gestione della sicurezza e fornisce un livello di astrazione che permette modifiche ai servizi backend senza impattare i client.
+
+Per deployment enterprise su cluster Kubernetes, l'architettura si estende naturalmente con lo stack EFK (Elasticsearch, Fluentd, Kibana) per un monitoring completo e centralizzato. Fluentd viene deployato come DaemonSet su ogni nodo del cluster, raccogliendo automaticamente i log di tutti i container e inviandoli ad Elasticsearch per indicizzazione e storage. Kibana fornisce quindi un'interfaccia web ricca per visualizzazione, ricerca e analisi dei log in tempo reale, permettendo di correlare eventi tra diversi microservizi e identificare rapidamente problemi o pattern anomali. Questa configurazione offre visibilità completa sull'intero sistema distribuito, essenziale per operazioni production-ready.
+
+
+2.2 ANATOMIA DEI COMPONENTI
+
+Ogni componente dell'architettura è stato progettato con un ruolo specifico e interfacce ben definite:
+
+API GATEWAY (FastAPI) -> Rappresenta il cervello del sistema di routing, orchestrando tutte le comunicazioni tra frontend e servizi backend. La sua responsabilità principale è garantire che ogni richiesta venga autenticata, autorizzata e instradata correttamente. Inoltre, centralizza aspetti cruciali come la gestione CORS per applicazioni web moderne e implementa strategie di rate limiting per proteggere il sistema da abusi.
+
+NOTES SERVICE (FastAPI) -> Il cuore dell'applicazione, dove risiede tutta la logica di business relativa alla gestione delle note. Implementa un'architettura Domain-Driven Design che separa chiaramente la logica di dominio dalle preoccupazioni infrastrutturali. Questa separazione facilita enormemente la testabilità e la manutenibilità del codice, permettendo modifiche all'interfaccia utente o al database senza toccare la logica di business principale.
+
+KEYCLOAK (Identity Provider) -> La fortezza della sicurezza del sistema, fornendo un layer di autenticazione robusto e conforme agli standard industriali. Keycloak non è solo un sistema di login, ma una piattaforma completa per la gestione dell'identità che supporta federazioni, single sign-on e integrazione con sistemi aziendali esistenti.
+
+POSTGRESQL (Database) -> La fondazione su cui poggia tutta la persistenza dati. La scelta di PostgreSQL non è casuale: oltre ad essere un database relazionale estremamente maturo e 
+performante, offre capacità di ricerca full-text native che eliminano la necessità di sistemi esterni per la ricerca testuale, semplificando l'architettura complessiva.
+
+2.3 FILOSOFIA ARCHITETTURALE
+
+Le scelte architetturali di SharedNotes riflettono l'adozione di pattern consolidati che hanno dimostrato la loro efficacia in sistemi enterprise:
+
+MICROSERVICES PATTERN -> L'adozione dei microservizi non è stata una scelta di moda, ma una decisione strategica motivata da esigenze concrete: la necessità di scalare diversi componenti indipendentemente, la possibilità di utilizzare tecnologie diverse per problemi specifici, e la resilienza che deriva dall'isolamento dei fallimenti. Quando un servizio ha problemi, gli altri continuano a funzionare, garantendo un'esperienza utente più robusta.
+
+DOMAIN-DRIVEN DESIGN (DDD) -> Nel Notes Service, l'implementazione DDD porta ordine nella complessità della logica di business. Le entità di dominio incapsulano non solo dati ma anche comportamenti, mentre il pattern Repository astrae completamente i dettagli di persistenza. Questa separazione permette di testare la logica di business in isolamento e di modificare l'infrastruttura sottostante senza impatti sul codice di dominio.
+
+API GATEWAY PATTERN ->Il gateway non è solo un proxy intelligente, ma un vero e proprio orchestratore che centralizza preoccupazioni trasversali. Questo approccio evita la duplicazione 
+di logica di autenticazione e autorizzazione in ogni servizio, semplificando la gestione della sicurezza e fornendo un punto centrale per implementare politiche di accesso coerenti.
+
+3. MODELLO DATI E DATABASE
+3.1 PROGETTAZIONE DEL DATABASE
+
+Il database rappresenta il cuore pulsante di SharedNotes, dove ogni decisione di design è stata ponderata per bilanciare performance, scalabilità e integrità dei dati. La scelta di utilizzare UUID come chiavi primarie, pur comportando un overhead di storage minimo, offre vantaggi significativi in termini di distribuzione e integrazione con sistemi esterni come Keycloak.
+
+La struttura relazionale è stata progettata seguendo principi di normalizzazione che prevengono anomalie di aggiornamento, pur mantenendo un equilibrio pragmatico che favorisce le performance delle query più comuni. Ogni tabella ha uno scopo preciso e relazioni ben definite che riflettono fedelmente il dominio di business.
+
+DATA MODEL:
+
+NOTES table -> rappresenta l'entità centrale del sistema, contenente non solo i dati essenziali come titolo e contenuto, ma anche metadati cruciali per la gestione del ciclo di vita delle note. Il campo `search_vector` di tipo `tsvector` permette ricerche full-text performanti senza dipendenze esterne, mentre il flag `is_deleted` implementa un soft delete che preserva l'integrità referenziale e permette eventuali recuperi.
+
+TAGS table -> mantiene il catalogo delle etichette disponibili, progettata per essere semplice ma estensibile. Il vincolo di unicità sul nome previene duplicazioni accidentali, mentre la struttura aperta permette future estensioni come gerarchie di tag o metadati aggiuntivi.
+
+NOTE_TAGS table -> implementa la relazione molti-a-molti tra note e tag attraverso una junction table pulita e performante. Questa separazione permette query efficienti sia per trovare i tag di una nota che per trovare tutte le note con un determinato tag.
+
+NOTE_SHARES table -> gestisce il complesso dominio della condivisione, mantenendo traccia non solo di chi condivide cosa con chi, ma anche dei permessi associati e del timestamp di condivisione per audit e debugging.
+
+USERS table -> mantiene gli utenti registrati all’applicazione. Referenziata dal resto delle tabelle per ovvi motivi. In fase di implementazione si è scelto di utilizzare Keycloak come IAM e di non replicare le info degli utenti anche nel database applicativo.
+3.2 RICERCA FULL TEXT
+------------------------------
+Il cuore del sistema di ricerca risiede nell'indice GIN su `search_vector`, che trasforma PostgreSQL in un motore di ricerca performante. Questo approccio nativo evita la complessità di sistemi esterni mantenendo la consistenza transazionale. Il sistema di ranking integrato assicura che i risultati più 
+rilevanti appaiano primi, considerando sia la frequenza che la posizione dei termini cercati nel titolo e nel contenuto.
+4. IMPLEMENTAZIONE BACKEND
+4.1 ANATOMIA DEL NOTES SERVICE
+Il Notes Service rappresenta il cuore dell'applicazione, dove la complessità della logica di business viene domata attraverso un'architettura stratificata che segue rigorosamente i principi del Domain-Driven Design. Questa struttura non è solo teoricamente elegante, ma offre vantaggi pratici concreti in termini di testabilità, manutenibilità e evoluzione del codice.
+
+Separazione delle Responsabilità:
+
+Domain Layer -> contiene la conoscenza del business: qui risiedono le entità che modellano fedelmente il dominio delle note condivise, con tutte le regole e invarianti che garantiscono la consistenza logica del sistema. Le interfacce dei repository definiscono contratti chiari per l'accesso ai dati, senza legarsi a dettagli implementativi specifici.
+
+Application Layer -> orchestra le operazioni, traducendo le richieste HTTP in operazioni di dominio meaningful. I router FastAPI gestiscono aspetti tecnici come la validazione dell'input e la serializzazione dell'output, mentre i modelli Pydantic garantiscono che i dati siano sempre validi e ben tipizzati.
+
+Infrastructure Layer -> si occupa dei dettagli concreti: come i dati vengono effettivamente persistiti, come le connessioni database vengono gestite, come i modelli ORM si mappano alle entità di dominio. Questa separazione permette di cambiare database o ORM senza toccare la logica di business.
+
+Utils Layer -> centralizza configurazioni e utilità trasversali, evitando duplicazioni e fornendo punti di configurazione centrali per l'intero servizio.
+4.2 DOMAIN ENTITIES
+Le entità di dominio rappresentano il cuore concettuale di SharedNotes, incarnando la logica di business in oggetti che riflettono fedelmente il mondo reale delle note condivise. Questi oggetti non sono semplici contenitori di dati, ma entità intelligenti che conoscono le proprie regole e sanno come comportarsi.
+
+Note -> Al centro del sistema troviamo l'entità Note, che rappresenta molto più di un semplice documento testuale. Ogni nota è un oggetto complesso che mantiene la propria identità attraverso un UUID unico, conosce il proprio proprietario, e gestisce autonomamente il proprio ciclo di vita. La nota sa validare il proprio contenuto, gestire i tag associati, e determinare se un utente specifico ne è il proprietario. Questa intelligenza incorporata elimina la necessità di logica di business sparsa nel codice applicativo. Il soft delete attraverso il flag `is_deleted` permette di mantenere l'integrità referenziale e l'audit trail, mentre i timestamp automatici forniscono tracciabilità completa delle modifiche. Il supporto integrato per la ricerca full-text attraverso il search_vector rende ogni nota immediatamente ricercabile.
+
+Tag -> I tag rappresentano un sistema di categorizzazione flessibile e user-friendly. Ogni tag è un'entità autonoma con la propria identità e regole di validazione per il nome. Questa separazione permette funzionalità avanzate come la gestione di tag popolari, suggerimenti automatici, e future estensioni come gerarchie di tag o tag colorati. L'entità tag sa auto-validarsi e garantisce che non esistano duplicati o nomi non validi nel sistema.
+
+Search -> L'entità Search rappresenta la materializzazione delle operazioni di ricerca come oggetti di dominio a pieno titolo. Non è semplicemente una query o un risultato, ma un'entità complessa che incapsula criteri di ricerca, metadati di paginazione, e risultati con il loro contesto temporale. Questa entità sa validare i propri parametri, calcolare automaticamente i metadati di paginazione, e mantenere coerenza tra criteri di ricerca e risultati ottenuti. L'entità Search gestisce la complessità delle ricerche multi-criterio, combinando ricerca testuale, filtri per tag, e sezioni specifiche (note personali, condivise), presentando tutto attraverso un'interfaccia unificata e comprensibile. Include inoltre timestamp di ricerca per supportare funzionalità come cache intelligente e analytics, trasformando ogni ricerca in un evento tracciabile e analizzabile per miglioramenti futuri del sistema.
+4.3 IL REPOSITORY PATTERN
+Il Repository Pattern rappresenta uno dei pilastri architetturali più eleganti di SharedNotes, creando un ponte invisibile ma fondamentale tra il mondo concettuale del dominio e la realtà concreta della persistenza dati. Questa astrazione non è solo un esercizio teorico, ma una scelta pragmatica che porta benefici concreti in termini di testabilità, manutenibilità e flessibilità.
+
+Al livello del dominio, i repository esistono come contratti puri - interfacce che definiscono cosa è possibile fare con le entità senza rivelare come queste operazioni vengano effettivamente implementate. Questa separazione permette alla logica di business di concentrarsi su ciò che conta davvero: le regole del dominio e i comportamenti delle entità.
+L'implementazione concreta, relegata al layer infrastrutturale, si occupa dei dettagli tecnici: come tradurre query di dominio in SQL, come gestire le transazioni, come convertire tra modelli ORM e entità di dominio. Questa dualità permette di testare la logica di business in completo isolamento, usando mock repositories, e di cambiare tecnologie di persistenza senza impattare il cuore del sistema.
+Il pattern elimina la dipendenza diretta delle entità di dominio dai dettagli infrastrutturali, rendendo il codice più pulito, testabile e evolvibile. Permette inoltre di implementare facilità come caching, audit logging, o validazioni aggiuntive nel layer repository senza modificare la logica di business.
+4.4 L'ORCHESTRAZIONE DEI SERVIZI
+Il Service Layer rappresenta il direttore d'orchestra dell'applicazione, coordinando l'interazione tra entità di dominio, repository e servizi esterni per realizzare casi d'uso complessi. Questi servizi non sono semplici passthrough verso i repository, ma veri e propri orchestratori che implementano logica di business trasversale e workflow complessi.
+
+Note Service -> gestisce l'intero ecosistema delle note, dalle operazioni CRUD basilari ai workflow complessi di condivisione. Si occupa di validare le regole di business (un utente può modificare solo le proprie note), coordina operazioni multi-entità (condividere una nota con più utenti), e garantisce la consistenza dei dati attraverso transazioni appropriate. Inoltre, centralizza aspetti trasversali come logging delle operazioni e gestione degli errori con strategie 
+di recovery appropriate.
+
+Search Service -> trasforma la ricerca da semplice matching testuale a esperienza intelligente. Combina ricerca full-text con filtri semantici, implementa strategie di caching per performance ottimali, e gestisce la paginazione di risultati potenzialmente enormi. La sua responsabilità va oltre la mera esecuzione di query: ottimizza i pattern di accesso, suggerisce contenuti correlati, e mantiene statistiche di utilizzo per miglioramenti futuri.
+
+Tag Service -> gestisce le operazioni di base sui tag del sistema. Implementa una funzionalità essenziale ma elegante: il recupero di tutti i tag disponibili nel sistema con ordinamento alfabetico automatico.
+4.5 DESIGN DELLE API REST
+L'API di SharedNotes segue principi RESTful consolidati, organizzando gli endpoint in modo logico e intuitivo. Ogni gruppo di endpoint riflette un dominio specifico dell'applicazione, facilitando sia l'implementazione che l'utilizzo:
+
+GESTIONE NOTE -> Gli endpoint delle note coprono l'intero ciclo di vita del contenuto, dalla 
+creazione alla rimozione. Particolare attenzione è stata posta alla distinzione tra note personali e condivise, permettendo agli utenti di navigare facilmente tra i propri contenuti e quelli ricevuti in condivisione.
+
+CONDIVISIONE COLLABORATIVA -> Il sistema di sharing è progettato per essere sia potente che semplice da usare. Gli endpoint permettono di condividere note con granularità fine, gestire 
+permessi specifici e mantenere traccia completa di tutte le condivisioni attive.
+
+RICERCA E SCOPERTA ->Le funzionalità di ricerca vanno oltre la semplice ricerca testuale, includendo filtri per tag che permettono agli utenti di ritrovare rapidamente i contenuti anche in archivi molto grandi.
+5. IMPLEMENTAZIONE FRONTEND
+5.1 FILOSOFIA DEL FRONTEND
+Il frontend di SharedNotes rappresenta più di una semplice interfaccia utente: è un ecosistema React moderno progettato per offrire un'esperienza fluida e intuitiva. L'architettura non solo facilita la manutenzione e la riusabilità del codice, ma permette anche una collaborazione efficace tra sviluppatori attraverso confini ben definiti.
+
+La struttura delle cartelle riflette una separazione logica delle responsabilità. I componenti React risiedono nella loro area dedicata, ognuno con uno scopo specifico e interfacce pulite. Il layer dei servizi astrae completamente le comunicazioni con il backend, permettendo modifiche all'API senza impattare i componenti UI. Le utilities centralizzano logica condivisa e configurazioni, 
+evitando duplicazioni e inconsistenze.
+
+Questa organizzazione non è solo esteticamente piacevole, ma offre vantaggi pratici concreti: nuovi sviluppatori possono orientarsi rapidamente nel codebase, i bug si localizzano facilmente, e nuove funzionalità si integrano naturalmente nella struttura esistente.
+5.2 GESTIONE INTELLIGENTE DELLO STATO
+La gestione dello stato in SharedNotes bilancia sapientemente semplicità e potenza, utilizzando i pattern React più appropriati per ogni livello di complessità:
+
+L'AuthContext rappresenta il sistema nervoso dell'autenticazione, mantenendo informazioni cruciali come i token utente e lo stato di login accessibili a tutta l'applicazione. Questa centralizzazione evita il drilling di props attraverso componenti annidati e assicura che tutti i componenti abbiano 
+sempre accesso alle informazioni di autenticazione più aggiornate.
+
+Il sistema gestisce automaticamente scenari complessi come la scadenza dei token, implementando logout automatico e refresh trasparente quando possibile. Questo approccio garantisce che l'utente non si trovi mai in uno stato inconsistente di autenticazione.
+
+Per lo stato che riguarda componenti specifici, l'uso strategico di useState e useEffect mantiene il codice leggibile e performante. Ogni componente gestisce solo lo stato che gli compete, riducendo la complessità e facilitando il debugging.
+5.4 USER EXPERIENCE
+RESPONSIVE DESIGN:
+- CSS Grid e Flexbox per layout
+- Mobile-first approach
+- Breakpoints per tablet e desktop
+
+ACCESSIBILITY:
+- Semantic HTML elements
+- ARIA labels per screen readers
+- Keyboard navigation support
+- Focus management
+
+ERROR HANDLING:
+- Toast notifications per feedback
+- Form validation client-side
+- Graceful degradation per errori rete
+- Loading states per operazioni async
+6. SICUREZZA E AUTENTICAZIONE
+6.1 ARCHITETTURA AUTENTICAZIONE
+KEYCLOAK INTEGRATION:
+- OAuth2/OpenID Connect standard
+- JWT token-based authentication
+- Centralized user management
+- Role-based access control ready
+
+FLOW AUTENTICAZIONE:
+1. User login → Keycloak authentication
+2. Keycloak → JWT access + refresh tokens
+3. Frontend → Tokens stored in memory
+4. API calls → Bearer token in headers
+5. API Gateway → Token validation with Keycloak
+6. Token refresh → Automatic before expiry
+6.2 SICUREZZA API
+TOKEN VALIDATION:
+- JWT signature verification
+- Token expiry checking
+- Keycloak public key validation
+- User claims extraction
+
+AUTHORIZATION:
+- User ID extraction from token
+- Ownership validation for resources
+- Read-only permissions for shared notes
+- Admin role support (future)
+
+INPUT VALIDATION:
+- Pydantic models per request validation
+- SQL injection prevention via ORM
+- XSS prevention con output encoding
+- CSRF protection via SameSite cookies
+6.3 HEADERS DI SICUREZZA
+API RESPONSES:
+- X-Content-Type-Options: nosniff
+- X-Frame-Options: DENY
+- X-XSS-Protection: 1; mode=block
+- Strict-Transport-Security (HTTPS)
+
+CORS CONFIGURATION:
+- Restricted origins per environment
+- Credentials support per authenticated requests
+- Limited HTTP methods
+- Secure headers handling
+6.4 GESTIONE PASSWORD
+KEYCLOAK SECURITY:
+- Bcrypt password hashing
+- Password complexity policies
+- Account lockout protection
+- Brute force detection
+
+SESSION MANAGEMENT:
+- Short-lived access tokens
+- Long-lived refresh tokens
+- Automatic token refresh
+- Secure logout con token invalidation
+7. DEPLOYMENT E CONTAINERIZZAZIONE
+7.1 DOCKER COMPOSE ORCHESTRATION
+SERVICES CONFIGURATION:
+- PostgreSQL con persistent volumes
+- Keycloak con database initialization
+- API Gateway con service discovery
+- Notes Service con health checks
+- Frontend con nginx serving
+
+NETWORKING:
+- Custom bridge network per isolation
+- Internal communication tra servizi
+- External ports solo per necessari
+- Service discovery via container names
+
+VOLUMES:
+- Database persistence
+- SSL certificates mounting
+- Configuration files
+- Logs aggregation
+
+8. PIPELINE CI/CD E DEVOPS
+8.1 FILOSOFIA DEVOPS
+SharedNotes adotta un approccio DevOps che privilegia l'automazione completa del ciclo di sviluppo, dall'integrazione continua al deployment in produzione. La strategia elimina interventi manuali propensi all'errore e garantisce rilasci frequenti e affidabili attraverso pipeline automatizzate che validano qualità e stabilità ad ogni commit. La cultura di automazione permea ogni aspetto: test automatizzati, controlli di sicurezza, e deployment blue-green con rollback immediato. La qualità è prerequisito fondamentale - nessun codice raggiunge produzione senza superare validazioni complete di funzionalità, performance e sicurezza.
+8.2 CONTINUOUS INTEGRATION E DEPLOYMENT
+La pipeline CI/CD trasforma ogni commit in un candidato potenziale per il rilascio attraverso GitHub Actions. Il sistema esegue progressivamente validazioni sintattiche, test unitari e di integrazione, controlli di sicurezza e analisi di qualità, fornendo feedback rapidissimo agli sviluppatori.
+
+La strategia multi-environment prevede deployment automatico su sviluppo, approvazione manuale per staging, e rilascio controllato in produzione con tecniche blue-green per zero downtime. Container Docker garantiscono consistenza assoluta tra tutti gli ambienti, eliminando discrepanze e il problema "funziona sulla mia macchina".
+8.3 MONITORING E OBSERVABILITY
+L'osservabilità va oltre il semplice monitoring, creando un sistema nervoso digitale con visibilità completa sullo stato applicativo. Logging strutturato JSON e correlation ID permettono di tracciare richieste attraverso i microservizi, facilitando debugging in architetture distribuite.
+
+Per deployment enterprise, lo stack EFK (Elasticsearch, Fluentd, Kibana) fornisce observability avanzata: Elasticsearch indicizza milioni di eventi in tempo reale, Fluentd raccoglie log da tutti i container Kubernetes normalizzandoli, Kibana offre dashboard personalizzabili e alerting 
+intelligente che previene l'alert fatigue attraverso soglie dinamiche.
+8.4 INFRASTRUCTURE AS CODE
+L'infrastruttura è completamente codificata con Docker Compose, trattando configurazione infrastrutturale con la stessa disciplina del codice applicativo. Questo garantisce riproducibilità, tracciabilità e facilità di rollback per modifiche infrastrutturali. L'architettura containerizzata è progettata per evolversi naturalmente verso Kubernetes quando la scala lo richiederà, sfruttando auto-scaling, self-healing e rolling updates senza modifiche architetturali significative.
+
